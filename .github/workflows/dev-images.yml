@@ -11,8 +11,26 @@ on:
       - 'packages/**'
 
 jobs:
+  check-dockerhub-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      has_dockerhub_secrets: ${{ steps.check-dockerhub-secrets.outputs.has_dockerhub_secrets }}
+    steps:
+      - name: Check Docker Hub secrets
+        id: check-dockerhub-secrets
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "has_dockerhub_secrets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_dockerhub_secrets=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
-    if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+    needs: check-dockerhub-secrets
+    if: ${{ needs.check-dockerhub-secrets.outputs.has_dockerhub_secrets == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -39,7 +57,7 @@ jobs:
 
       # Log in to GitHub Container Registry
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
