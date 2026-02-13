@@ -102,7 +102,9 @@ export interface AppConfig {
   availableTools?: Record<string, FunctionTool>;
   /** Role-based model access configuration (from librechat.yaml) */
   roles?: TCustomConfig['roles'];
-  /** Active role model restrictions (set by applyRoleBasedConfig for the current user's role) */
+  /** Group-based model access configuration (from librechat.yaml) */
+  groups?: TCustomConfig['groups'];
+  /** Active model restrictions (set by role or group-based config) */
   _roleModelRestrictions?: Record<string, { models: string[] }>;
   endpoints?: {
     /** Admin exemption list of host:port pairs that bypass the SSRF private-IP block */
