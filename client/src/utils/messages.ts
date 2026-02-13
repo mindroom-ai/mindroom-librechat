@@ -3,6 +3,7 @@ import {
   Constants,
   buildTree,
   ContentTypes,
+  parseTextParts,
   isEphemeralAgentId,
   getEphemeralSender,
   appendAgentIdSuffix,
@@ -948,3 +949,17 @@ export function areMessageRowPropsEqual(prev: TMessageProps, next: TMessageProps
     areMessageFieldsEqual(prev.message, next.message)
   );
 }
+
+/**
+ * Parses message content for Text-to-Speech, optionally skipping reasoning/thinking blocks.
+ *
+ * @param content - The message content (string or array of content parts)
+ * @param skipReasoning - Whether to skip reasoning/thinking blocks (true = skip, false = include)
+ * @returns The parsed text string for TTS
+ */
+export const parseMessageForTTS = (
+  content: TMessageContentParts[] | string,
+  skipReasoning: boolean,
+): string => {
+  return typeof content === 'string' ? content : parseTextParts(content, skipReasoning);
+};

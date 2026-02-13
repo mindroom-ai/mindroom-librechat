@@ -10,6 +10,7 @@ import {
   ThinkingButton,
   ThinkingLabel,
   FloatingThinkingBar,
+  ThinkingReadAloud,
   useInViewport,
 } from './Thinking';
 import { useLocalize, useExpandCollapse, useLazyCollapseBody } from '~/hooks';
@@ -165,7 +166,7 @@ const Reasoning = memo((props: ReasoningProps) => {
   const { ref: headerRef, inViewport: headerInViewport } = useInViewport();
   const { style: expandStyle, ref: expandRef } = useExpandCollapse(isExpanded);
   const { shouldRenderBody, mountBody, handleTransitionEnd } = useLazyCollapseBody(isExpanded);
-  const { isSubmitting, isLatestMessage, nextType } = useMessageContext();
+  const { messageId, isSubmitting, isLatestMessage, nextType } = useMessageContext();
 
   // Strip <think> tags from the reasoning content (modern format)
   const reasoningText = useMemo(() => stripThinkTags(reasoning), [reasoning]);
@@ -232,6 +233,7 @@ const Reasoning = memo((props: ReasoningProps) => {
             label={label}
             content={reasoningText}
             contentId={contentId}
+            messageId={`${messageId}-thinking`}
             animateLabel={
               smoothStreaming && effectiveIsSubmitting && Boolean(reasoningLabel?.trim())
             }
@@ -310,6 +312,7 @@ export const ReasoningCompact = memo(
   }: ReasoningCompactProps) => {
     const contentId = useId();
     const localize = useLocalize();
+    const { messageId } = useMessageContext();
     const fontSize = useAtomValue(fontSizeAtom);
     const [expansionOverride, setIsExpanded] = useAtom(useReasoningDisclosure(partKeyIndex));
     const [defaultExpanded] = useState(showThinking);
@@ -389,6 +392,16 @@ export const ReasoningCompact = memo(
               aria-hidden="true"
             />
           </Button>
+          <ThinkingReadAloud
+            id={`${messageId ?? 'thinking'}-thinking-${contentId}`}
+            content={reasoningText}
+            className={cn(
+              'shrink-0 opacity-0 transition-opacity',
+              'group-focus-within/reasoning-compact:opacity-100 group-hover/reasoning-compact:opacity-100',
+              'focus-visible:opacity-100',
+              !isExpanded && 'hidden',
+            )}
+          />
           {isExpanded && (
             <CopyButton
               isCopied={isCopied}

@@ -20,6 +20,9 @@ jest.mock('../Thinking', () => ({
   ThinkingContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   ThinkingButton: () => <button type="button">{'thinking'}</button>,
   FloatingThinkingBar: () => null,
+  ThinkingReadAloud: ({ id, className }: { id: string; className?: string }) => (
+    <button type="button" className={className}>{`read-aloud-${id}`}</button>
+  ),
   useInViewport: () => ({ ref: { current: null }, inViewport: true }),
 }));
 
@@ -115,5 +118,22 @@ describe('ReasoningCompact', () => {
     );
 
     expect(screen.getByText('A long stream of reasoning')).toBeInTheDocument();
+  });
+});
+
+/** Grouped thoughts hide the floating bar while the header is visible, so read-aloud lives in the header. */
+describe('ReasoningCompact read-aloud', () => {
+  it('offers read-aloud in the header when expanded', () => {
+    render(<ReasoningCompact reasoning="A useful thought" label="Thoughts" showThinking={true} />);
+
+    const readAloud = screen.getByRole('button', { name: /^read-aloud-thinking-thinking-/ });
+    expect(readAloud).not.toHaveClass('hidden');
+  });
+
+  /** Collapsing must not unmount the control, or browser speech keeps going with no Stop. */
+  it('keeps read-aloud mounted but hidden while collapsed', () => {
+    render(<ReasoningCompact reasoning="A useful thought" label="Thoughts" showThinking={false} />);
+
+    expect(screen.getByRole('button', { name: /^read-aloud-/ })).toHaveClass('hidden');
   });
 });

@@ -1,9 +1,9 @@
 import React from 'react';
 import { RecoilRoot } from 'recoil';
 import { render, waitFor } from '@testing-library/react';
-import { Constants, QueryKeys } from 'librechat-data-provider';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Constants, ContentTypes, QueryKeys } from 'librechat-data-provider';
 import type { TMessage, TConversation } from 'librechat-data-provider';
 import BrowserAudio from '../BrowserAudio';
 import store from '~/store';
@@ -48,11 +48,13 @@ const renderBrowserAudio = ({
   audioRunId = null,
   isSubmitting = false,
   messages = [assistantMessage],
+  includeThinkingInTTS = false,
 }: {
   activeRunId?: string | null;
   audioRunId?: string | null;
   isSubmitting?: boolean;
   messages?: TMessage[];
+  includeThinkingInTTS?: boolean;
 } = {}) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -69,6 +71,7 @@ const renderBrowserAudio = ({
             set(store.activeRunFamily(0), activeRunId);
             set(store.audioRunFamily(0), audioRunId);
             set(store.isSubmittingFamily(0), isSubmitting);
+            set(store.includeThinkingInTTS, includeThinkingInTTS);
           }}
         >
           <Routes>
@@ -136,6 +139,28 @@ describe('BrowserAudio autoplay', () => {
     await settle();
 
     expect(spoken).toEqual([]);
+  });
+
+  describe('include thinking in TTS', () => {
+    const thinkingMessage = {
+      ...assistantMessage,
+      content: [
+        { type: ContentTypes.THINK, think: 'Recalling capitals.' },
+        { type: ContentTypes.TEXT, text: responseText },
+      ],
+    } as TMessage;
+
+    it('skips reasoning by default', async () => {
+      renderBrowserAudio({ messages: [thinkingMessage] });
+
+      await waitFor(() => expect(spoken).toEqual([responseText]));
+    });
+
+    it('reads reasoning when the setting is on', async () => {
+      renderBrowserAudio({ messages: [thinkingMessage], includeThinkingInTTS: true });
+
+      await waitFor(() => expect(spoken).toEqual([`Recalling capitals. ${responseText}`]));
+    });
   });
 
   it('cancels the utterance when the conversation is left', async () => {

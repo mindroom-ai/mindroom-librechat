@@ -13,6 +13,7 @@ import { Lightbulb, ChevronDown } from 'lucide-react';
 import { Button, MorphIcon, TooltipAnchor } from '@librechat/client';
 import { ChevronUp as ChevronUpNode, ChevronDown as ChevronDownNode } from 'lucide';
 import type { FocusEvent, FC } from 'react';
+import MessageAudio from '~/components/Chat/Messages/MessageAudio';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useLocalize, useExpandCollapse } from '~/hooks';
 import { showThinkingAtom } from '~/store/showThinking';
@@ -69,6 +70,38 @@ export const ThinkingContent: FC<{
 });
 
 /**
+ * Read-aloud control for a reasoning block. Render one per block (in its header) so the
+ * block has a single playback session; `id` must be unique per reasoning part because
+ * each control mounts an `audio-${id}` element.
+ */
+export const ThinkingReadAloud = memo(
+  ({ id, content, className }: { id: string; content: string; className?: string }) => (
+    <MessageAudio
+      index={0}
+      messageId={id}
+      content={content}
+      renderButton={(props) => (
+        <TooltipAnchor
+          description={props.title}
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              type="button"
+              onClick={props.onClick}
+              aria-label={props.title}
+              className={className}
+            >
+              {props.icon}
+            </Button>
+          }
+        />
+      )}
+    />
+  ),
+);
+
+/**
  * ThinkingButton - Toggle button for expanding/collapsing thinking content
  * Shows lightbulb icon by default, chevron on hover
  * Shared between legacy Thinking component and modern ContentParts
@@ -80,6 +113,7 @@ export const ThinkingButton = memo(
     label,
     content,
     contentId,
+    messageId,
     showCopyButton = true,
     animateLabel = false,
     shimmerLabel = false,
@@ -89,6 +123,8 @@ export const ThinkingButton = memo(
     label: string;
     content?: string;
     contentId: string;
+    /** Read-aloud id prefix; `contentId` is appended so each reasoning part stays unique. */
+    messageId?: string;
     showCopyButton?: boolean;
     animateLabel?: boolean;
     /** Reasoning is still being generated: carry the same shimmer a running
@@ -119,7 +155,10 @@ export const ThinkingButton = memo(
            *  row in the same list as tool calls, grouped thoughts and phase
            *  summaries, all set at that scale. Sized to the body it read as a
            *  second, larger kind of row beside them. */
-          className="group/button tool-status-text flex flex-1 items-center justify-start rounded-lg pr-10"
+          className={cn(
+            'group/button tool-status-text flex flex-1 items-center justify-start rounded-lg pr-10',
+            content && isExpanded && 'pr-20',
+          )}
         >
           <span className={cn(ROW_GLYPH_SLOT, 'relative mr-2')}>
             <Lightbulb
@@ -169,6 +208,20 @@ export const ThinkingButton = memo(
             )}
           </span>
         </button>
+        {/* Stays mounted while collapsed so an in-flight playback keeps its Stop state. */}
+        {content && (
+          <ThinkingReadAloud
+            id={`${messageId ?? 'thinking'}-${contentId}`}
+            content={content}
+            className={cn(
+              'absolute top-1/2 -translate-y-1/2 opacity-0 transition-opacity',
+              showCopyButton ? 'right-8' : 'right-0',
+              'group-focus-within/thinking-container:opacity-100 group-hover/thinking-container:opacity-100',
+              'focus-visible:opacity-100',
+              !isExpanded && 'hidden',
+            )}
+          />
+        )}
         {content && showCopyButton && isExpanded && (
           <CopyButton
             isCopied={isCopied}
@@ -392,6 +445,7 @@ const Thinking: React.ElementType = memo(({ children }: { children: React.ReactN
   );
 });
 
+ThinkingReadAloud.displayName = 'ThinkingReadAloud';
 ThinkingButton.displayName = 'ThinkingButton';
 ThinkingContent.displayName = 'ThinkingContent';
 ThinkingLabel.displayName = 'ThinkingLabel';

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { useSetRecoilState } from 'recoil';
 import { useParams } from 'react-router-dom';
 import { parseTextParts } from 'librechat-data-provider';
+import { useRecoilValue, useSetRecoilState } from 'recoil';
 import useTextToSpeechBrowser from '~/hooks/Input/useTextToSpeechBrowser';
 import useAutoplayTrigger from '~/hooks/Audio/useAutoplayTrigger';
 import { logger } from '~/utils';
@@ -16,6 +16,7 @@ export default function BrowserAudio({ index = 0 }) {
   const { conversationId: paramId } = useParams();
   const setIsSpeaking = useSetRecoilState(store.globalAudioPlayingFamily(index));
   const setAudioRunId = useSetRecoilState(store.audioRunFamily(index));
+  const includeThinkingInTTS = useRecoilValue(store.includeThinkingInTTS);
 
   const { shouldPlay, activeRunId, latestMessage } = useAutoplayTrigger(index);
   const { generateSpeechLocal, cancelSpeechLocal } = useTextToSpeechBrowser({ setIsSpeaking });
@@ -38,7 +39,7 @@ export default function BrowserAudio({ index = 0 }) {
 
     const text =
       Array.isArray(latestMessage.content) && latestMessage.content.length > 0
-        ? parseTextParts(latestMessage.content)
+        ? parseTextParts(latestMessage.content, !includeThinkingInTTS)
         : (latestMessage.text ?? '');
 
     if (!text) {
@@ -51,7 +52,14 @@ export default function BrowserAudio({ index = 0 }) {
     if (generateSpeechLocal(text)) {
       setAudioRunId(activeRunId);
     }
-  }, [shouldPlay, activeRunId, latestMessage, setAudioRunId, generateSpeechLocal]);
+  }, [
+    shouldPlay,
+    activeRunId,
+    latestMessage,
+    setAudioRunId,
+    generateSpeechLocal,
+    includeThinkingInTTS,
+  ]);
 
   return null;
 }

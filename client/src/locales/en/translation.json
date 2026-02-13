@@ -727,6 +727,7 @@
   "com_nav_during_run_action_queue": "Queue for after",
   "com_nav_during_run_action_steer": "Steer the response",
   "com_nav_enable_cache_tts": "Enable cache TTS",
+  "com_nav_include_thinking_tts": "Include thinking in TTS",
   "com_nav_enable_cloud_browser_voice": "Use cloud-based voices",
   "com_nav_engine": "Engine",
   "com_nav_enter_to_send": "Press Enter to send messages",
