@@ -156,27 +156,27 @@ const collapsePendingCompletedDuplicates = (segments: ToolSegment[]): ToolSegmen
     return segments;
   }
 
-  const latestIndexById = new Map<string, number>();
+  const firstIndexById = new Map<string, number>();
+  const finalSegmentById = new Map<string, Extract<ToolSegment, { type: 'tool' }>>();
+
   for (let index = 0; index < segments.length; index++) {
     const segment = segments[index];
     if (segment.type !== 'tool') {
       continue;
     }
 
-    const previousIndex = latestIndexById.get(segment.id);
-    if (previousIndex == null) {
-      latestIndexById.set(segment.id, index);
+    if (!firstIndexById.has(segment.id)) {
+      firstIndexById.set(segment.id, index);
+    }
+
+    const previous = finalSegmentById.get(segment.id);
+    if (previous == null) {
+      finalSegmentById.set(segment.id, segment);
       continue;
     }
 
-    const previousSegment = segments[previousIndex];
-    if (segment.state === 'done') {
-      latestIndexById.set(segment.id, index);
-      continue;
-    }
-
-    if (previousSegment.type === 'tool' && previousSegment.state !== 'done') {
-      latestIndexById.set(segment.id, index);
+    if (segment.state === 'done' || previous.state !== 'done') {
+      finalSegmentById.set(segment.id, segment);
     }
   }
 
@@ -188,11 +188,16 @@ const collapsePendingCompletedDuplicates = (segments: ToolSegment[]): ToolSegmen
       continue;
     }
 
-    if (latestIndexById.get(segment.id) !== index) {
+    if (firstIndexById.get(segment.id) !== index) {
       continue;
     }
 
-    collapsed.push(segment);
+    const finalSegment = finalSegmentById.get(segment.id);
+    if (finalSegment == null) {
+      continue;
+    }
+
+    collapsed.push(finalSegment);
   }
 
   return collapsed;

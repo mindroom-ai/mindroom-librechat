@@ -383,6 +383,33 @@ describe('Text tool tag rendering', () => {
     expect(toolCalls[0]).toHaveAttribute('data-state', 'active');
   });
 
+  test('keeps tool card anchored where start appeared when done arrives later', () => {
+    const content = [
+      'Before tool',
+      toolStart(1, 'search_knowledge_base(query=tools capabilities)'),
+      'Assistant keeps writing while tool runs.',
+      toolDone(1, 'search_knowledge_base(query=tools capabilities)', '[{"name":"a.md"}]'),
+      'After tool',
+    ].join('\n');
+
+    mockUseMessageContext.mockReturnValue({ isSubmitting: false, isLatestMessage: true } as any);
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCall = screen.getByTestId('tool-call');
+    expect(toolCall).toHaveAttribute('data-output', '[{"name":"a.md"}]');
+    expect(toolCall).toHaveAttribute('data-progress', '1');
+
+    const markdownBlocks = screen.getAllByTestId('markdown');
+    expect(markdownBlocks).toHaveLength(2);
+    expect(markdownBlocks[1].textContent).toContain('Assistant keeps writing while tool runs.');
+    expect(markdownBlocks[1].textContent).toContain('After tool');
+
+    const orderedParts = screen
+      .getAllByTestId(/^(tool-call|markdown)$/)
+      .map((el) => el.dataset.testid);
+    expect(orderedParts).toEqual(['markdown', 'tool-call', 'markdown']);
+  });
+
   test('collapses batched start blocks followed by done blocks', () => {
     const content = [
       toolStart(1, 'search_knowledge_base(query=one)'),
