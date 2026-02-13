@@ -349,4 +349,14 @@ describe('Text tool tag rendering', () => {
     expect(toolCall).toHaveAttribute('data-progress', '1');
     expect(toolCall).toHaveAttribute('data-state', 'active');
   });
+
+  test('keeps follow-up prose as markdown after capturing external Result line', () => {
+    const content = '<tool>list_entities(domain=light)</tool>\nResult: ok\nDone.';
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCall = screen.getByTestId('tool-call');
+    expect(toolCall).toHaveAttribute('data-output', 'ok');
+    const markdownBlocks = screen.getAllByTestId('markdown');
+    expect(markdownBlocks.some((block) => block.textContent?.includes('Done.'))).toBe(true);
+  });
 });

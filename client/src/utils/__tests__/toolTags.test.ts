@@ -279,4 +279,21 @@ describe('parseToolTags', () => {
       },
     ]);
   });
+
+  test('does not absorb follow-up assistant prose after external Result line', () => {
+    const segments = parseToolTags('<tool>list_entities(domain=light)</tool>\nResult: ok\nDone.');
+
+    expect(segments).toEqual([
+      {
+        type: 'tool',
+        call: 'list_entities(domain=light)',
+        result: 'ok',
+        raw: 'list_entities(domain=light)',
+      },
+      {
+        type: 'text',
+        text: '\nDone.',
+      },
+    ]);
+  });
 });

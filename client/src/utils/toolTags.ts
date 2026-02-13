@@ -144,9 +144,9 @@ const parseResultContinuation = (text: string): ToolResultContinuation | null =>
   }
 
   const resultStart = resultLineStart + resultPrefix.length;
-  const sectionBreak = text.indexOf('\n\n', resultStart);
-  const consumed = sectionBreak === -1 ? text.length : sectionBreak;
-  const result = normalizeResultValue(text.slice(resultStart, consumed));
+  const resultLineValue = text.slice(resultStart, resultLineEnd);
+  const consumed = resultLineEnd;
+  const result = normalizeResultValue(resultLineValue);
 
   return {
     consumed,
