@@ -299,6 +299,31 @@ describe('parseToolTags', () => {
     ]);
   });
 
+  test('keeps tool anchored at start position when done appears later', () => {
+    const segments = parseToolTags(
+      [
+        'Before tool',
+        '<tool id="1" state="start">search_knowledge_base(query=tools)</tool>',
+        'Assistant keeps writing while tool runs.',
+        '<tool id="1" state="done">search_knowledge_base(query=tools)\n[{"name":"a.md"}]</tool>',
+        'After tool',
+      ].join('\n'),
+    );
+
+    expect(segments).toEqual([
+      { type: 'text', text: 'Before tool\n' },
+      {
+        type: 'tool',
+        id: '1',
+        state: 'done',
+        call: 'search_knowledge_base(query=tools)',
+        result: '[{"name":"a.md"}]',
+        raw: 'search_knowledge_base(query=tools)\n[{"name":"a.md"}]',
+      },
+      { type: 'text', text: '\nAssistant keeps writing while tool runs.\n\nAfter tool' },
+    ]);
+  });
+
   test('does not collapse distinct tool calls with different ids', () => {
     const segments = parseToolTags(
       [
