@@ -57,19 +57,21 @@ export default function AudioRecorder({
 
   const setText = useCallback(
     (text: string) => {
-      let newText = text;
-      if (isExternalSTT(speechToTextEndpoint)) {
-        /** For external STT, the text comes as a complete transcription, so append to existing */
-        newText = existingTextRef.current ? `${existingTextRef.current} ${text}` : text;
-      } else {
-        /** For browser STT, the transcript is cumulative, so we only need to prepend the existing text once */
-        newText = existingTextRef.current ? `${existingTextRef.current} ${text}` : text;
+      const textarea = textAreaRef.current;
+
+      if (textarea) {
+        textarea.focus();
+        textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, 'end');
+        setValue('text', textarea.value, { shouldValidate: true });
+        return;
       }
-      setValue('text', newText, {
+
+      // Fallback: if textarea isn't mounted yet, just set the value
+      setValue('text', text, {
         shouldValidate: true,
       });
     },
-    [setValue, speechToTextEndpoint],
+    [setValue, textAreaRef],
   );
 
   const { isListening, isLoading, startRecording, stopRecording } = useSpeechToText(
