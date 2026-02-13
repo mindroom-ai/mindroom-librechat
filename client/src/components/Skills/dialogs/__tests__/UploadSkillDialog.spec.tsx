@@ -70,13 +70,12 @@ jest.mock('~/utils', () => ({
   cn: (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' '),
 }));
 
-function getFileInput(): HTMLInputElement {
-  const inputs = document.body.querySelectorAll('input[type="file"][accept=".zip,.skill,.md"]');
-  const input = inputs.item(inputs.length - 1);
-  if (!(input instanceof HTMLInputElement)) {
-    throw new Error('Upload input was not rendered');
-  }
-  return input;
+function dropFile(file: File) {
+  fireEvent.drop(screen.getByRole('button', { name: /drag and drop or click to upload/i }), {
+    dataTransfer: {
+      files: [file],
+    },
+  });
 }
 
 describe('UploadSkillDialog', () => {
@@ -114,11 +113,7 @@ describe('UploadSkillDialog', () => {
       type: 'application/zip',
     });
 
-    fireEvent.change(getFileInput(), {
-      target: {
-        files: [file],
-      },
-    });
+    dropFile(file);
 
     expect(mockMutate).not.toHaveBeenCalled();
     expect(mockShowToast).toHaveBeenCalledWith({
@@ -134,11 +129,7 @@ describe('UploadSkillDialog', () => {
       type: 'application/zip',
     });
 
-    fireEvent.change(getFileInput(), {
-      target: {
-        files: [file],
-      },
-    });
+    dropFile(file);
 
     expect(mockShowToast).not.toHaveBeenCalled();
     expect(appendSpy).toHaveBeenCalledWith('file', file, file.name);
@@ -153,11 +144,7 @@ describe('UploadSkillDialog', () => {
       type: 'application/zip',
     });
 
-    fireEvent.change(getFileInput(), {
-      target: {
-        files: [file],
-      },
-    });
+    dropFile(file);
 
     expect(mockShowToast).not.toHaveBeenCalled();
     expect(appendSpy).toHaveBeenCalledWith('file', file, file.name);
