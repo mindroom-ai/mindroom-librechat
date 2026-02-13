@@ -20,6 +20,7 @@ permissions:
 
 jobs:
   build:
+    if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 130
     strategy:
