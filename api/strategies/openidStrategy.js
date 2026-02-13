@@ -570,6 +570,9 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
         `[openidStrategy] User ${username} has groups: ${groupList.join(', ') || '(none)'}`,
       );
     }
+  } else if (user.openidGroups && user.openidGroups.length > 0) {
+    // Clear stale groups when group extraction is not configured
+    user.openidGroups = undefined;
   }
 
   if (!!userinfo && userinfo.picture && !user.avatar?.includes('manual=true')) {

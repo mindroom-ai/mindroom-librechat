@@ -41,6 +41,8 @@ export interface IUser extends Document {
   }>;
   createdAt?: Date;
   updatedAt?: Date;
+  /** IdP groups extracted from OIDC token on login */
+  openidGroups?: string[];
   /** Field for external source identification (for consistency with TPrincipal schema) */
   idOnTheSource?: string;
 }

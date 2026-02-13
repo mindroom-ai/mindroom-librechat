@@ -35,8 +35,12 @@ function filterModelsByRole(allModels, restrictions) {
  */
 function getModelsCacheKey(role, openidGroups) {
   if (openidGroups && openidGroups.length > 0) {
-    const sorted = [...openidGroups].sort().join(',');
-    return `${CacheKeys.MODELS_CONFIG}:g:${sorted}`;
+    // JSON.stringify handles group names that contain commas or special chars
+    const groupsPart = JSON.stringify([...openidGroups].sort());
+    // Include role because getAppConfig may fall back to role-based restrictions
+    // when none of the user's groups match the config
+    const rolePart = role || '_';
+    return `${CacheKeys.MODELS_CONFIG}:g:${rolePart}:${groupsPart}`;
   }
   return role ? `${CacheKeys.MODELS_CONFIG}:${role}` : CacheKeys.MODELS_CONFIG;
 }
