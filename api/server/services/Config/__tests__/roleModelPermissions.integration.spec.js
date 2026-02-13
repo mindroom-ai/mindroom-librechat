@@ -565,6 +565,43 @@ describe('Role-based model permissions (integration)', () => {
       expect(appConfig._roleModelRestrictions.openAI).toEqual({ models: ['gpt-4o-mini'] });
     });
 
+    it('group-based config is not short-circuited by cached role config', async () => {
+      loadCustomConfig.mockResolvedValue({
+        version: '1.2.1',
+        interface: { customWelcome: 'hi' },
+        roles: {
+          USER: {
+            endpoints: {
+              openAI: { models: ['gpt-4o-mini'] },
+            },
+          },
+        },
+        groups: {
+          'premium-group': {
+            endpoints: {
+              openAI: { models: ['gpt-4o', 'gpt-4o-mini', 'o1'] },
+            },
+          },
+        },
+        endpoints: {
+          openAI: { titleModel: 'gpt-4o-mini' },
+        },
+      });
+
+      // First call: role-based config gets cached internally
+      const roleConfig = await getAppConfig({ role: 'USER' });
+      expect(roleConfig._roleModelRestrictions.openAI).toEqual({ models: ['gpt-4o-mini'] });
+
+      // Second call: same role but with groups — must NOT return the cached role config
+      const groupConfig = await getAppConfig({
+        role: 'USER',
+        openidGroups: ['premium-group'],
+      });
+      expect(groupConfig._roleModelRestrictions.openAI.models).toEqual(
+        expect.arrayContaining(['gpt-4o', 'gpt-4o-mini', 'o1']),
+      );
+    });
+
     it('no restrictions when user has no groups and no role config', async () => {
       loadCustomConfig.mockResolvedValue({
         version: '1.2.1',

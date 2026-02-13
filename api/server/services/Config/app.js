@@ -34,7 +34,9 @@ async function getAppConfig(options = {}) {
   const cache = getLogStores(CacheKeys.APP_CONFIG);
   const cacheKey = role ? role : BASE_CONFIG_KEY;
 
-  if (!refresh) {
+  // Skip the per-role cache when groups are present — group-based config
+  // must be computed fresh (ModelController handles per-group caching).
+  if (!refresh && !(openidGroups && openidGroups.length > 0)) {
     const cached = await cache.get(cacheKey);
     if (cached) {
       return cached;
