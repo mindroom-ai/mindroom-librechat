@@ -139,6 +139,7 @@ export const AppService = async (params?: {
   const memory = loadMemoryConfig(config.memory);
   const summarization = loadSummarizationConfig(config);
   const skillSync = loadSkillSyncConfig(config);
+  const roles = config.roles;
   const filteredTools = config.filteredTools;
   const includedTools = config.includedTools;
   const fileStrategy = (config.fileStrategy ?? configDefaults.fileStrategy) as
@@ -174,6 +175,7 @@ export const AppService = async (params?: {
     ocr,
     paths,
     config,
+    roles,
     memory,
     speech,
     actions,

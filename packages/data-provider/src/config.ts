@@ -3122,6 +3122,31 @@ export type TOpenIdDiscoveryConfig = z.infer<typeof openIdDiscoverySchema>;
 /** Maximum CAS attempts per ACL document, including the initial attempt. */
 export const permissionWriteAttemptsSchema = z.number().int().min(1).max(100).default(3);
 
+const roleEndpointModelsSchema = z.object({
+  models: z.array(z.string()),
+});
+
+const roleEndpointsSchema = z
+  .object({
+    [EModelEndpoint.openAI]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.google]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.anthropic]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.azureOpenAI]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.azureAssistants]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.assistants]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.agents]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.bedrock]: roleEndpointModelsSchema.optional(),
+    custom: z.record(z.string(), roleEndpointModelsSchema).optional(),
+  })
+  .strict();
+
+const roleConfigSchema = z.object({
+  endpoints: roleEndpointsSchema.optional(),
+});
+
+export const rolesConfigSchema = z.record(z.string(), roleConfigSchema).optional();
+export type TRolesConfig = z.infer<typeof rolesConfigSchema>;
+
 export const configSchema = z.object({
   version: z.string(),
   permissions: z.object({ maxWriteAttempts: permissionWriteAttemptsSchema }).optional(),
@@ -3233,6 +3258,7 @@ export const configSchema = z.object({
   modelSpecs: specsConfigSchema.optional(),
   filters: filtersConfigSchema.optional(),
   messageFilter: messageFilterSchema.optional(),
+  roles: rolesConfigSchema,
   endpoints: z
     .object({
       allowedAddresses: allowedAddressesSchema,
