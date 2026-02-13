@@ -20,7 +20,21 @@ jobs:
   sync-translations:
     name: Sync Translation Keys with Locize
     runs-on: ubuntu-latest
+    outputs:
+      has_locize_secrets: ${{ steps.check-locize-secrets.outputs.has_locize_secrets }}
     steps:
+      - name: Check Locize secrets
+        id: check-locize-secrets
+        env:
+          LOCIZE_API_KEY: ${{ secrets.LOCIZE_API_KEY }}
+          LOCIZE_PROJECT_ID: ${{ secrets.LOCIZE_PROJECT_ID }}
+        run: |
+          if [ -n "$LOCIZE_API_KEY" ] && [ -n "$LOCIZE_PROJECT_ID" ]; then
+            echo "has_locize_secrets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_locize_secrets=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout Repository
         uses: actions/checkout@v5
         with:
@@ -37,13 +51,18 @@ jobs:
       # Git owns English source values. Push changed values to Locize without
       # allowing a stale checkout to delete keys that still exist remotely.
       - name: Sync Locize with Repository
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' && steps.check-locize-secrets.outputs.has_locize_secrets == 'true' }}
         env:
           LOCIZE_API_KEY: ${{ secrets.LOCIZE_API_KEY }}
           LOCIZE_PROJECT_ID: ${{ secrets.LOCIZE_PROJECT_ID }}
         run: |
           cd client/src/locales
           locize sync --cdn-type pro --api-key "$LOCIZE_API_KEY" --project-id "$LOCIZE_PROJECT_ID" --language en --skip-delete true --update-values true
+
+      - name: Skip sync step on push when Locize secrets are missing
+        if: ${{ github.event_name == 'push' && steps.check-locize-secrets.outputs.has_locize_secrets != 'true' }}
+        run: |
+          echo "Skipping locize sync because LOCIZE_API_KEY or LOCIZE_PROJECT_ID is not configured."
 
       # When triggered by repository_dispatch, skip sync step.
       - name: Skip sync step on non-push events
@@ -52,9 +71,9 @@ jobs:
 
   create-pull-request:
     name: Create Translation PR on Version Published
-    if: ${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: sync-translations
+    if: ${{ (github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch') && needs.sync-translations.outputs.has_locize_secrets == 'true' }}
     permissions:
       contents: write
       pull-requests: write
