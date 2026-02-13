@@ -8,6 +8,7 @@ import {
   ListeningIcon,
   Spinner,
 } from '@librechat/client';
+import type { RefObject } from 'react';
 import { useLocalize, useSpeechToText, useGetAudioSettings } from '~/hooks';
 import { globalAudioId, type TAskFunction } from '~/common';
 import { useChatFormContext } from '~/Providers';
@@ -18,11 +19,13 @@ export default memo(function AudioRecorder({
   disabled,
   ask,
   methods,
+  textAreaRef,
   isSubmitting,
 }: {
   disabled: boolean;
   ask: TAskFunction;
   methods: ReturnType<typeof useChatFormContext>;
+  textAreaRef?: RefObject<HTMLTextAreaElement>;
   isSubmitting: boolean;
 }) {
   const { setValue, reset, getValues } = methods;
@@ -69,19 +72,22 @@ export default memo(function AudioRecorder({
 
   const setText = useCallback(
     (text: string) => {
-      let newText = text;
-      if (isExternalSTT(speechToTextEndpoint)) {
-        /** For external STT, the text comes as a complete transcription, so append to existing */
-        newText = existingTextRef.current ? `${existingTextRef.current} ${text}` : text;
-      } else {
-        /** For browser STT, the transcript is cumulative, so we only need to prepend the existing text once */
-        newText = existingTextRef.current ? `${existingTextRef.current} ${text}` : text;
+      const textarea = textAreaRef?.current;
+
+      if (textarea) {
+        textarea.focus();
+        textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, 'end');
+        setValue('text', textarea.value, { shouldValidate: true });
+        return;
       }
+
+      /** Fallback when the textarea isn't mounted: append to the draft captured at record start */
+      const newText = existingTextRef.current ? `${existingTextRef.current} ${text}` : text;
       setValue('text', newText, {
         shouldValidate: true,
       });
     },
-    [setValue, speechToTextEndpoint],
+    [setValue, textAreaRef],
   );
 
   const { isListening, isLoading, startRecording, stopRecording } = useSpeechToText(
