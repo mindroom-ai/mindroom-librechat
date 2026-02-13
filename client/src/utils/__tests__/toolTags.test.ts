@@ -249,4 +249,44 @@ describe('parseToolTags', () => {
       },
     ]);
   });
+
+  test('collapses pending+completed duplicate blocks for the same tool call', () => {
+    const segments = parseToolTags(
+      '<tool>search_knowledge_base(query=tools)</tool>\n\n<tool>search_knowledge_base(query=tools)\n[{&quot;name&quot;:&quot;a.md&quot;}]</tool>',
+    );
+
+    expect(segments).toEqual([
+      {
+        type: 'tool',
+        call: 'search_knowledge_base(query=tools)',
+        result: '[{"name":"a.md"}]',
+        raw: 'search_knowledge_base(query=tools)\n[{&quot;name&quot;:&quot;a.md&quot;}]',
+      },
+    ]);
+  });
+
+  test('does not collapse distinct tool calls separated by non-whitespace text', () => {
+    const segments = parseToolTags(
+      '<tool>search_knowledge_base(query=tools)</tool>\nNow checking again.\n<tool>search_knowledge_base(query=tools)\nresult</tool>',
+    );
+
+    expect(segments).toEqual([
+      {
+        type: 'tool',
+        call: 'search_knowledge_base(query=tools)',
+        result: null,
+        raw: 'search_knowledge_base(query=tools)',
+      },
+      {
+        type: 'text',
+        text: '\nNow checking again.\n',
+      },
+      {
+        type: 'tool',
+        call: 'search_knowledge_base(query=tools)',
+        result: 'result',
+        raw: 'search_knowledge_base(query=tools)\nresult',
+      },
+    ]);
+  });
 });

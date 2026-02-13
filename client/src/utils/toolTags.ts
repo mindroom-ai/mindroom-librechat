@@ -298,6 +298,46 @@ const parseRange = (text: string, start: number, end: number): ToolSegment[] => 
   return segments;
 };
 
+const collapsePendingCompletedDuplicates = (segments: ToolSegment[]): ToolSegment[] => {
+  if (segments.length < 2) {
+    return segments;
+  }
+
+  const collapsed: ToolSegment[] = [];
+  let index = 0;
+
+  while (index < segments.length) {
+    const current = segments[index];
+    if (current.type !== 'tool' || current.result !== null) {
+      collapsed.push(current);
+      index += 1;
+      continue;
+    }
+
+    let cursor = index + 1;
+    while (cursor < segments.length) {
+      const candidate = segments[cursor];
+      if (candidate.type === 'text' && candidate.text.trim().length === 0) {
+        cursor += 1;
+        continue;
+      }
+      break;
+    }
+
+    const next = segments[cursor];
+    if (next?.type === 'tool' && next.result !== null && next.call.trim() === current.call.trim()) {
+      collapsed.push(next);
+      index = cursor + 1;
+      continue;
+    }
+
+    collapsed.push(current);
+    index += 1;
+  }
+
+  return collapsed;
+};
+
 /**
  * Parse assistant text into ordered segments of plain text and tool blocks.
  */
@@ -306,7 +346,7 @@ export function parseToolTags(text: string): ToolSegment[] {
     return [{ type: 'text', text: '' }];
   }
 
-  const segments = parseRange(text, 0, text.length);
+  const segments = collapsePendingCompletedDuplicates(parseRange(text, 0, text.length));
   if (segments.length === 0) {
     return [{ type: 'text', text }];
   }

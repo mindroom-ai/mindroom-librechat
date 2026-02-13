@@ -327,4 +327,23 @@ describe('Text tool tag rendering', () => {
     const markdown = screen.getByTestId('markdown');
     expect(markdown.textContent).toContain('Result: [{"entity_id":"light.kitchen"}]');
   });
+
+  test('collapses pending+completed duplicate tool blocks into one completed card', () => {
+    const content = [
+      '<tool>search_knowledge_base(query=tools capabilities)</tool>',
+      '',
+      '<tool>search_knowledge_base(query=tools capabilities)',
+      '[{"name":"a.md"}]</tool>',
+    ].join('\n');
+
+    mockUseMessageContext.mockReturnValue({ isSubmitting: false, isLatestMessage: true } as any);
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCalls = screen.getAllByTestId('tool-call');
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0]).toHaveAttribute('data-name', 'search_knowledge_base');
+    expect(toolCalls[0]).toHaveAttribute('data-output', '[{"name":"a.md"}]');
+    expect(toolCalls[0]).toHaveAttribute('data-progress', '1');
+    expect(toolCalls[0]).toHaveAttribute('data-state', 'active');
+  });
 });
