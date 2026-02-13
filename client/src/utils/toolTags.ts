@@ -184,7 +184,11 @@ const findInlineCodeEnd = (text: string, start: number, delimiterCount: number, 
   return end;
 };
 
-const findNextToolTagOutsideCode = (text: string, start: number, end: number): ToolTagMatch | null => {
+const findNextToolTagOutsideCode = (
+  text: string,
+  start: number,
+  end: number,
+): ToolTagMatch | null => {
   let cursor = start;
 
   while (cursor < end) {
@@ -255,8 +259,7 @@ const parseRange = (text: string, start: number, end: number): ToolSegment[] => 
       const raw = text.slice(bodyStart, closeIndex);
       const newlineIndex = raw.indexOf('\n');
       const call = decodeHtmlEntities(newlineIndex === -1 ? raw : raw.slice(0, newlineIndex));
-      const result =
-        newlineIndex === -1 ? null : decodeHtmlEntities(raw.slice(newlineIndex + 1));
+      const result = newlineIndex === -1 ? null : decodeHtmlEntities(raw.slice(newlineIndex + 1));
 
       segments.push({
         type: 'tool',

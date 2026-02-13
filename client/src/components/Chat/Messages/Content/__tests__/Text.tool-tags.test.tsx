@@ -78,7 +78,9 @@ describe('Text tool tag rendering', () => {
   });
 
   test('renders pending tool as a ToolCall card and hides raw tool tags', () => {
-    render(<Text text="<tool>save_file(file=a.py)</tool>" isCreatedByUser={false} showCursor={false} />);
+    render(
+      <Text text="<tool>save_file(file=a.py)</tool>" isCreatedByUser={false} showCursor={false} />,
+    );
 
     const toolCall = screen.getByTestId('tool-call');
     expect(toolCall).toBeInTheDocument();
@@ -147,7 +149,9 @@ describe('Text tool tag rendering', () => {
   });
 
   test('keeps user message rendering path unchanged', () => {
-    render(<Text text="<tool>save_file(file=a.py)</tool>" isCreatedByUser={true} showCursor={false} />);
+    render(
+      <Text text="<tool>save_file(file=a.py)</tool>" isCreatedByUser={true} showCursor={false} />,
+    );
 
     expect(screen.queryByTestId('tool-call')).not.toBeInTheDocument();
     expect(screen.getByTestId('markdown-lite')).toHaveTextContent(
@@ -178,7 +182,9 @@ describe('Text tool tag rendering', () => {
   test('marks pending tool as cancelled when stream is no longer submitting', () => {
     mockUseMessageContext.mockReturnValue({ isSubmitting: false, isLatestMessage: true } as any);
 
-    render(<Text text="<tool>save_file(file=a.py)</tool>" isCreatedByUser={false} showCursor={false} />);
+    render(
+      <Text text="<tool>save_file(file=a.py)</tool>" isCreatedByUser={false} showCursor={false} />,
+    );
 
     expect(screen.getByTestId('tool-call')).toHaveAttribute('data-state', 'cancelled');
   });

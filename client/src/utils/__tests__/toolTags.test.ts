@@ -108,7 +108,9 @@ describe('parseToolTags', () => {
   });
 
   test('preserves multiline tool result content', () => {
-    const segments = parseToolTags('<tool>run_shell(cmd=cat file.txt)\nline 1\nline 2\nline 3</tool>');
+    const segments = parseToolTags(
+      '<tool>run_shell(cmd=cat file.txt)\nline 1\nline 2\nline 3</tool>',
+    );
 
     expect(segments).toEqual([
       {
@@ -156,9 +158,7 @@ describe('parseToolTags', () => {
   });
 
   test('preserves exact interleaving order of text and tool segments', () => {
-    const segments = parseToolTags(
-      'A\n\n<tool>t1()\nr1</tool>\n\nB\n\n<tool>t2()\nr2</tool>\n\nC',
-    );
+    const segments = parseToolTags('A\n\n<tool>t1()\nr1</tool>\n\nB\n\n<tool>t2()\nr2</tool>\n\nC');
 
     expect(segments).toEqual([
       { type: 'text', text: 'A\n\n' },
