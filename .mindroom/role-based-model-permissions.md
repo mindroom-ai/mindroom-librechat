@@ -13,6 +13,17 @@
 
 MindRoom needs to restrict which models each user role can access, per endpoint. For example, `USER` role gets only `gpt-4o-mini` on OpenAI, while `ADMIN` sees all models. Without this, all authenticated users see every configured model.
 
+## Current limitation: only USER and ADMIN roles exist
+
+LibreChat currently assigns only two roles:
+
+- **`ADMIN`** — the first registered user, or users matched by `OPENID_ADMIN_ROLE`.
+- **`USER`** — everyone else.
+
+There is no built-in way to assign custom roles (e.g., `premium`, `basic`). No admin UI or API endpoint exists for changing a user's role — it can only be done by editing the `role` field directly in MongoDB.
+
+The config schema supports arbitrary role names, but **in practice only `USER` and `ADMIN` are useful today**. To support more tiers, the OIDC strategy would need a role mapping feature (e.g., an `OPENID_ROLE_MAPPING` env var that maps IdP groups to LibreChat role names).
+
 ## Configuration
 
 Add a `roles` section to `librechat.yaml`:
@@ -28,6 +39,12 @@ roles:
           models: [mindroom-basic]
   ADMIN:
     # No entry = no restrictions (sees all models)
+```
+
+Example with custom roles (requires future OIDC role mapping to be useful):
+
+```yaml
+roles:
   premium:
     endpoints:
       openAI:
@@ -90,13 +107,9 @@ librechat.yaml         (1) parsed by zod configSchema at startup
 - All filtering happens server-side. The client never receives the full model list.
 - Even if a user crafts a direct API request with a restricted model, `validateModel` middleware blocks it.
 
-## OIDC integration
+## Future: multi-tier roles via OIDC
 
-The OIDC strategy (`api/strategies/openidStrategy.js`) currently assigns only two roles:
-- `ADMIN` — if the user's token contains the `OPENID_ADMIN_ROLE` group.
-- `USER` — everyone else.
-
-This means `librechat.yaml` can differentiate `USER` vs `ADMIN` model access today. To support more tiers (e.g., `basic`, `premium`), a future `OPENID_ROLE_MAPPING` env var would map IdP groups to arbitrary LibreChat role names.
+To go beyond `USER`/`ADMIN`, the OIDC strategy (`api/strategies/openidStrategy.js`) would need to map IdP groups to arbitrary LibreChat role names. For example, an `OPENID_ROLE_MAPPING` env var could map groups from any OIDC provider to roles like `premium` or `basic`. This would make the custom role names in `librechat.yaml` functional without requiring direct MongoDB edits.
 
 ## Key files
 
