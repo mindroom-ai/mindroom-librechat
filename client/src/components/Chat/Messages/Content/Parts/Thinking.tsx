@@ -6,6 +6,7 @@ import type { FocusEvent, FC } from 'react';
 import { useLocalize, useExpandCollapse } from '~/hooks';
 import { showThinkingAtom } from '~/store/showThinking';
 import { fontSizeAtom } from '~/store/fontSize';
+import MessageAudio from '~/components/Chat/Messages/MessageAudio';
 import { cn } from '~/utils';
 
 /**
@@ -136,12 +137,14 @@ export const FloatingThinkingBar = memo(
     onClick,
     content,
     contentId,
+    messageId,
   }: {
     isVisible: boolean;
     isExpanded: boolean;
     onClick: (e: MouseEvent<HTMLButtonElement>) => void;
     content?: string;
     contentId: string;
+    messageId?: string;
   }) => {
     const localize = useLocalize();
     const [isCopied, setIsCopied] = useState(false);
@@ -198,28 +201,55 @@ export const FloatingThinkingBar = memo(
           }
         />
         {content && (
-          <TooltipAnchor
-            description={copyTooltip}
-            render={
-              <button
-                type="button"
-                tabIndex={isVisible ? 0 : -1}
-                onClick={handleCopy}
-                aria-label={copyTooltip}
-                className={cn(
-                  'flex items-center justify-center rounded p-1.5 text-text-tertiary',
-                  'hover:bg-surface-hover hover:text-text-primary',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
-                )}
-              >
-                {isCopied ? (
-                  <CheckMark className="h-[18px] w-[18px]" aria-hidden="true" />
-                ) : (
-                  <Clipboard size="18" aria-hidden="true" />
-                )}
-              </button>
-            }
-          />
+          <>
+            <MessageAudio
+              index={0}
+              messageId={messageId ?? `thinking-${content?.slice(0, 32)}`}
+              content={content}
+              renderButton={(props) => (
+                <TooltipAnchor
+                  description={props.title}
+                  render={
+                    <button
+                      type="button"
+                      tabIndex={isVisible ? 0 : -1}
+                      onClick={props.onClick}
+                      aria-label={props.title}
+                      className={cn(
+                        'flex items-center justify-center rounded-lg bg-surface-secondary p-1.5 text-text-secondary-alt shadow-sm',
+                        'hover:bg-surface-hover hover:text-text-primary',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
+                      )}
+                    >
+                      {props.icon}
+                    </button>
+                  }
+                />
+              )}
+            />
+            <TooltipAnchor
+              description={copyTooltip}
+              render={
+                <button
+                  type="button"
+                  tabIndex={isVisible ? 0 : -1}
+                  onClick={handleCopy}
+                  aria-label={copyTooltip}
+                  className={cn(
+                    'flex items-center justify-center rounded-lg bg-surface-secondary p-1.5 text-text-secondary-alt shadow-sm',
+                    'hover:bg-surface-hover hover:text-text-primary',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
+                  )}
+                >
+                  {isCopied ? (
+                    <CheckMark className="h-[18px] w-[18px]" aria-hidden="true" />
+                  ) : (
+                    <Clipboard size="18" aria-hidden="true" />
+                  )}
+                </button>
+              }
+            />
+          </>
         )}
       </div>
     );
