@@ -1,5 +1,5 @@
 const { logger } = require('@librechat/data-schemas');
-const { CacheKeys } = require('librechat-data-provider');
+const { CacheKeys, Time } = require('librechat-data-provider');
 const { loadDefaultModels, loadConfigModels, getAppConfig } = require('~/server/services/Config');
 const { getLogStores } = require('~/cache');
 
@@ -96,7 +96,10 @@ const getModelsConfig = async (req, options = {}) => {
   const appConfig = await getAppConfig({ role, openidGroups });
   const filtered = filterModelsByRole(baseModels, appConfig._roleModelRestrictions);
 
-  if (role || (openidGroups && openidGroups.length > 0)) {
+  if (openidGroups && openidGroups.length > 0) {
+    // TTL for group-based entries — group combinations are per-user so entries can accumulate
+    await cache.set(cacheKey, filtered, Time.TEN_MINUTES);
+  } else if (role) {
     await cache.set(cacheKey, filtered);
   }
 

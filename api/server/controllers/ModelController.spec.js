@@ -5,6 +5,9 @@ jest.mock(
       CONFIG_STORE: 'CONFIG_STORE',
       MODELS_CONFIG: 'MODELS_CONFIG',
     },
+    Time: {
+      TEN_MINUTES: 600000,
+    },
   }),
   { virtual: true },
 );
@@ -343,6 +346,7 @@ describe('getModelsConfig group-based filtering', () => {
     expect(configStore.set).toHaveBeenCalledWith(
       'MODELS_CONFIG:g:USER:["premium"]',
       { openAI: ['gpt-4o-mini'] },
+      600000,
     );
   });
 
