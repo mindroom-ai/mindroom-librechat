@@ -6,6 +6,7 @@ export interface CustomMenuProps extends Ariakit.MenuButtonProps<'div'> {
   label?: React.ReactNode;
   values?: Record<string, any>;
   onValuesChange?: (values: Record<string, any>) => void;
+  onOpenChange?: (open: boolean) => void;
   searchValue?: string;
   onSearch?: (value: string) => void;
   combobox?: Ariakit.ComboboxProps['render'];
@@ -20,6 +21,7 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
     children,
     values,
     onValuesChange,
+    onOpenChange,
     searchValue,
     onSearch,
     combobox,
@@ -48,6 +50,10 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
   const nestedMenuStateClass = isOpen
     ? 'bg-surface-hover'
     : 'hover:bg-surface-hover data-[active-item]:bg-surface-hover';
+
+  React.useEffect(() => {
+    onOpenChange?.(isOpen);
+  }, [onOpenChange, isOpen]);
 
   const element = (
     <Ariakit.MenuProvider store={menuStore} values={values} setValues={onValuesChange}>

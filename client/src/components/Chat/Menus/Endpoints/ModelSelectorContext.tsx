@@ -1,8 +1,11 @@
-import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback, useRef } from 'react';
 import debounce from 'lodash/debounce';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   EModelEndpoint,
   PermissionBits,
+  QueryKeys,
+  dataService,
   isAgentsEndpoint,
   isAssistantsEndpoint,
 } from 'librechat-data-provider';
@@ -21,12 +24,15 @@ import { useModelSelectorChatContext } from './ModelSelectorChatContext';
 import useSelectMention from '~/hooks/Input/useSelectMention';
 import { filterItems } from './utils';
 
+const MODELS_REFRESH_COOLDOWN_MS = 10_000;
+
 type ModelSelectorContextType = {
   // State
   searchValue: string;
   selectedValues: SelectedValues;
   endpointSearchValues: Record<string, string>;
   searchResults: (t.TModelSpec | Endpoint)[] | null;
+  isRefreshingModels: boolean;
   // LibreChat
   modelSpecs: t.TModelSpec[];
   mappedEndpoints: Endpoint[];
@@ -42,6 +48,7 @@ type ModelSelectorContextType = {
   handleSelectSpec: (spec: t.TModelSpec) => void;
   handleSelectEndpoint: (endpoint: Endpoint) => void;
   handleSelectModel: (endpoint: Endpoint, model: string) => void;
+  refreshModels: () => Promise<void>;
 } & ReturnType<typeof useKeyDialog>;
 
 const ModelSelectorContext = createContext<ModelSelectorContextType | undefined>(undefined);
@@ -60,6 +67,7 @@ interface ModelSelectorProviderProps {
 }
 
 export function ModelSelectorProvider({ children, startupConfig }: ModelSelectorProviderProps) {
+  const queryClient = useQueryClient();
   const agentsMap = useAgentsMapContext();
   const assistantsMap = useAssistantsMapContext();
   const { data: endpointsConfig } = useGetEndpointsQuery();
@@ -174,6 +182,9 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
 
   const [searchValue, setSearchValueState] = useState('');
   const [endpointSearchValues, setEndpointSearchValues] = useState<Record<string, string>>({});
+  const [isRefreshingModels, setIsRefreshingModels] = useState(false);
+  const lastModelsRefreshAtRef = useRef(0);
+  const modelsRefreshPromiseRef = useRef<Promise<void> | null>(null);
 
   const keyProps = useKeyDialog();
 
@@ -199,6 +210,33 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
       [endpoint]: value,
     }));
   }, []);
+
+  const refreshModels = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastModelsRefreshAtRef.current < MODELS_REFRESH_COOLDOWN_MS) {
+      return;
+    }
+
+    if (modelsRefreshPromiseRef.current) {
+      return modelsRefreshPromiseRef.current;
+    }
+
+    const refreshPromise = dataService
+      .getModels(true)
+      .then((models) => {
+        queryClient.setQueryData([QueryKeys.models], models);
+        lastModelsRefreshAtRef.current = Date.now();
+      })
+      .catch(() => {})
+      .finally(() => {
+        setIsRefreshingModels(false);
+        modelsRefreshPromiseRef.current = null;
+      });
+
+    setIsRefreshingModels(true);
+    modelsRefreshPromiseRef.current = refreshPromise;
+    return refreshPromise;
+  }, [queryClient]);
 
   const handleSelectSpec = useCallback(
     (spec: t.TModelSpec) => {
@@ -270,6 +308,7 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
       searchResults,
       selectedValues,
       endpointSearchValues,
+      isRefreshingModels,
       agentsMap,
       modelSpecs,
       assistantsMap,
@@ -277,6 +316,7 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
       endpointsConfig,
       handleSelectSpec,
       handleSelectModel,
+      refreshModels,
       setSelectedValues,
       handleSelectEndpoint,
       setEndpointSearchValue,
@@ -289,6 +329,7 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
       searchResults,
       selectedValues,
       endpointSearchValues,
+      isRefreshingModels,
       agentsMap,
       modelSpecs,
       assistantsMap,
@@ -296,6 +337,7 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
       endpointsConfig,
       handleSelectSpec,
       handleSelectModel,
+      refreshModels,
       setSelectedValues,
       handleSelectEndpoint,
       setEndpointSearchValue,

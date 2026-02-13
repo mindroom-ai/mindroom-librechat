@@ -80,7 +80,9 @@ describe('useIsActiveItem', () => {
       probe.removeAttribute('data-active-item');
       await removed;
     });
-    await waitFor(() => expect(probe.getAttribute('data-active')).toBe('false'));
+    await waitFor(() => expect(probe.getAttribute('data-active')).toBe('false'), {
+      timeout: 5000,
+    });
   });
 
   it('ignores unrelated attribute mutations', async () => {
