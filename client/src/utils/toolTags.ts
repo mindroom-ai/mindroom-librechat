@@ -13,6 +13,15 @@ type ToolTagMatch = {
   type: ToolTagType;
 };
 
+type ToolResultContinuation = {
+  consumed: number;
+  call?: string;
+  result: string;
+};
+
+const TOOL_CALL_LINE_REGEX = /^[A-Za-z_][\w.-]*\s*\(.*\)\s*$/;
+const RESULT_LINE_PREFIX_REGEX = /^\s*result\s*:\s*/i;
+
 const decodeHtmlEntities = (value: string): string => {
   if (!value.includes('&')) {
     return value;
@@ -65,6 +74,85 @@ const pushTextSegment = (segments: ToolSegment[], text: string) => {
   }
 
   segments.push({ type: 'text', text });
+};
+
+const findLineEnd = (text: string, start: number) => {
+  const lineBreakIndex = text.indexOf('\n', start);
+  return lineBreakIndex === -1 ? text.length : lineBreakIndex;
+};
+
+const skipLeadingSpacing = (text: string, start: number) => {
+  let cursor = start;
+  while (cursor < text.length) {
+    const value = text[cursor];
+    if (value === ' ' || value === '\t' || value === '\n' || value === '\r') {
+      cursor++;
+      continue;
+    }
+    break;
+  }
+  return cursor;
+};
+
+const normalizeResultValue = (value: string) => {
+  if (value.startsWith('\r\n')) {
+    return value.slice(2);
+  }
+  if (value.startsWith('\n')) {
+    return value.slice(1);
+  }
+  return value;
+};
+
+const parseResultContinuation = (text: string): ToolResultContinuation | null => {
+  const firstContentStart = skipLeadingSpacing(text, 0);
+  if (firstContentStart >= text.length) {
+    return null;
+  }
+
+  const firstLineEnd = findLineEnd(text, firstContentStart);
+  const firstLine = text.slice(firstContentStart, firstLineEnd);
+
+  let call: string | undefined;
+  let resultLineStart = firstContentStart;
+
+  if (!RESULT_LINE_PREFIX_REGEX.test(firstLine)) {
+    if (!TOOL_CALL_LINE_REGEX.test(firstLine.trim())) {
+      return null;
+    }
+
+    const secondLineStart = firstLineEnd >= text.length ? text.length : firstLineEnd + 1;
+    if (secondLineStart >= text.length) {
+      return null;
+    }
+
+    const secondLineEnd = findLineEnd(text, secondLineStart);
+    const secondLine = text.slice(secondLineStart, secondLineEnd);
+    if (!RESULT_LINE_PREFIX_REGEX.test(secondLine)) {
+      return null;
+    }
+
+    call = firstLine.trim();
+    resultLineStart = secondLineStart;
+  }
+
+  const resultLineEnd = findLineEnd(text, resultLineStart);
+  const resultLine = text.slice(resultLineStart, resultLineEnd);
+  const resultPrefix = resultLine.match(RESULT_LINE_PREFIX_REGEX)?.[0];
+  if (!resultPrefix) {
+    return null;
+  }
+
+  const resultStart = resultLineStart + resultPrefix.length;
+  const sectionBreak = text.indexOf('\n\n', resultStart);
+  const consumed = sectionBreak === -1 ? text.length : sectionBreak;
+  const result = normalizeResultValue(text.slice(resultStart, consumed));
+
+  return {
+    consumed,
+    call,
+    result,
+  };
 };
 
 const countRepeat = (text: string, start: number, value: string, end: number) => {
@@ -306,7 +394,34 @@ export function parseToolTags(text: string): ToolSegment[] {
     return [{ type: 'text', text: '' }];
   }
 
-  const segments = parseRange(text, 0, text.length);
+  const parsedSegments = parseRange(text, 0, text.length);
+  const segments: ToolSegment[] = [];
+  for (const segment of parsedSegments) {
+    if (segment.type === 'text') {
+      const previous = segments[segments.length - 1];
+      if (previous?.type === 'tool' && previous.result == null) {
+        const continuation = parseResultContinuation(segment.text);
+        if (continuation) {
+          if (continuation.call && !previous.call.includes('(')) {
+            previous.call = decodeHtmlEntities(continuation.call);
+          }
+          previous.result = decodeHtmlEntities(continuation.result);
+
+          const remainingText = segment.text.slice(continuation.consumed);
+          pushTextSegment(segments, remainingText);
+          continue;
+        }
+      }
+    }
+
+    if (segment.type === 'text') {
+      pushTextSegment(segments, segment.text);
+      continue;
+    }
+
+    segments.push(segment);
+  }
+
   if (segments.length === 0) {
     return [{ type: 'text', text }];
   }

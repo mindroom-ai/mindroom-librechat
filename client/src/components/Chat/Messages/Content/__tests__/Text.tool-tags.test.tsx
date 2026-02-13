@@ -312,4 +312,41 @@ describe('Text tool tag rendering', () => {
     expect(toolCall).toHaveAttribute('data-name', 'run_shell');
     expect(toolCall).toHaveAttribute('data-output', '/app');
   });
+
+  test('renders trailing Result text inside the tool dropdown output instead of markdown', () => {
+    const content =
+      '<tool>list_entities(domain=light)</tool>\nResult: [{"entity_id":"light.kitchen"}]';
+
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCall = screen.getByTestId('tool-call');
+    expect(toolCall).toHaveAttribute('data-name', 'list_entities');
+    expect(toolCall).toHaveAttribute('data-args', 'list_entities(domain=light)');
+    expect(toolCall).toHaveAttribute('data-output', '[{"entity_id":"light.kitchen"}]');
+    expect(screen.queryByText(/Result:/)).not.toBeInTheDocument();
+  });
+
+  test('uses trailing function call line and Result as tool args/output', () => {
+    const content =
+      '<tool>Assistant used list_entities</tool>\nlist_entities(domain=light)\nResult: [{"entity_id":"light.kitchen"}]';
+
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCall = screen.getByTestId('tool-call');
+    expect(toolCall).toHaveAttribute('data-name', 'list_entities');
+    expect(toolCall).toHaveAttribute('data-args', 'list_entities(domain=light)');
+    expect(toolCall).toHaveAttribute('data-output', '[{"entity_id":"light.kitchen"}]');
+  });
+
+  test('does not mark externally-completed result tool as cancelled when not submitting', () => {
+    mockUseMessageContext.mockReturnValue({ isSubmitting: false, isLatestMessage: true } as any);
+    const content =
+      '<tool>list_entities(domain=light)</tool>\nResult: [{"entity_id":"light.kitchen"}]';
+
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCall = screen.getByTestId('tool-call');
+    expect(toolCall).toHaveAttribute('data-progress', '1');
+    expect(toolCall).toHaveAttribute('data-state', 'active');
+  });
 });
