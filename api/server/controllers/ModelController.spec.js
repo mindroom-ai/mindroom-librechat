@@ -5,6 +5,9 @@ jest.mock(
       CONFIG_STORE: 'CONFIG_STORE',
       MODELS_CONFIG: 'MODELS_CONFIG',
     },
+    Time: {
+      TEN_MINUTES: 600000,
+    },
   }),
   { virtual: true },
 );
@@ -270,5 +273,114 @@ describe('getModelsConfig role-based filtering', () => {
     await getModelsConfig(req);
 
     expect(configStore.get).toHaveBeenCalledWith(CacheKeys.MODELS_CONFIG);
+  });
+});
+
+describe('getModelsConfig group-based filtering', () => {
+  const configStore = {
+    get: jest.fn(),
+    set: jest.fn(),
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getLogStores.mockReturnValue(configStore);
+  });
+
+  test('uses group-based cache key that includes role', async () => {
+    const groupFiltered = { openAI: ['gpt-4o-mini'] };
+    configStore.get.mockResolvedValue(groupFiltered);
+
+    const req = { user: { role: 'USER', openidGroups: ['group-a', 'group-b'] }, query: {} };
+    await getModelsConfig(req);
+
+    // Key includes role and sorted groups as JSON
+    expect(configStore.get).toHaveBeenCalledWith('MODELS_CONFIG:g:USER:["group-a","group-b"]');
+  });
+
+  test('sorts groups in cache key for consistency', async () => {
+    const groupFiltered = { openAI: ['gpt-4o-mini'] };
+    configStore.get.mockResolvedValue(groupFiltered);
+
+    const req = { user: { role: 'USER', openidGroups: ['group-b', 'group-a'] }, query: {} };
+    await getModelsConfig(req);
+
+    expect(configStore.get).toHaveBeenCalledWith('MODELS_CONFIG:g:USER:["group-a","group-b"]');
+  });
+
+  test('different roles with same groups get different cache keys', async () => {
+    const baseModels = { openAI: ['gpt-4o', 'gpt-4o-mini'] };
+
+    // USER with groups
+    configStore.get.mockResolvedValueOnce(null).mockResolvedValueOnce(baseModels);
+    getAppConfig.mockResolvedValueOnce({
+      _roleModelRestrictions: { openAI: { models: ['gpt-4o-mini'] } },
+    });
+    const userReq = { user: { role: 'USER', openidGroups: ['group-a'] }, query: {} };
+    await getModelsConfig(userReq);
+
+    // ADMIN with same groups
+    configStore.get.mockResolvedValueOnce(null).mockResolvedValueOnce(baseModels);
+    getAppConfig.mockResolvedValueOnce({});
+    const adminReq = { user: { role: 'ADMIN', openidGroups: ['group-a'] }, query: {} };
+    await getModelsConfig(adminReq);
+
+    const setCalls = configStore.set.mock.calls;
+    const userKey = setCalls.find((c) => c[0].includes('USER'));
+    const adminKey = setCalls.find((c) => c[0].includes('ADMIN'));
+    expect(userKey[0]).not.toEqual(adminKey[0]);
+  });
+
+  test('computes and caches group-filtered models on cache miss', async () => {
+    const baseModels = { openAI: ['gpt-4o', 'gpt-4o-mini', 'o1'] };
+    configStore.get.mockResolvedValueOnce(null).mockResolvedValueOnce(baseModels);
+    getAppConfig.mockResolvedValue({
+      _roleModelRestrictions: { openAI: { models: ['gpt-4o-mini'] } },
+    });
+
+    const req = { user: { role: 'USER', openidGroups: ['premium'] }, query: {} };
+    const result = await getModelsConfig(req);
+
+    expect(getAppConfig).toHaveBeenCalledWith({ role: 'USER', openidGroups: ['premium'] });
+    expect(result).toEqual({ openAI: ['gpt-4o-mini'] });
+    expect(configStore.set).toHaveBeenCalledWith(
+      'MODELS_CONFIG:g:USER:["premium"]',
+      { openAI: ['gpt-4o-mini'] },
+      600000,
+    );
+  });
+
+  test('passes openidGroups to getAppConfig', async () => {
+    const baseModels = { openAI: ['gpt-4o'] };
+    configStore.get.mockResolvedValueOnce(null).mockResolvedValueOnce(baseModels);
+    getAppConfig.mockResolvedValue({});
+
+    const groups = ['alpha', 'beta'];
+    const req = { user: { role: 'USER', openidGroups: groups }, query: {} };
+    await getModelsConfig(req);
+
+    expect(getAppConfig).toHaveBeenCalledWith({ role: 'USER', openidGroups: groups });
+  });
+
+  test('uses role-only key when openidGroups is empty array', async () => {
+    const models = { openAI: ['gpt-4o'] };
+    configStore.get.mockResolvedValue(models);
+    getAppConfig.mockResolvedValue({});
+
+    const req = { user: { role: 'USER', openidGroups: [] }, query: {} };
+    await getModelsConfig(req);
+
+    expect(configStore.get).toHaveBeenCalledWith('MODELS_CONFIG:USER');
+  });
+
+  test('uses role-only key when openidGroups is undefined', async () => {
+    const models = { openAI: ['gpt-4o'] };
+    configStore.get.mockResolvedValue(models);
+    getAppConfig.mockResolvedValue({});
+
+    const req = { user: { role: 'USER' }, query: {} };
+    await getModelsConfig(req);
+
+    expect(configStore.get).toHaveBeenCalledWith('MODELS_CONFIG:USER');
   });
 });
