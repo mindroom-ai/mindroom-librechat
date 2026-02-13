@@ -3,6 +3,7 @@ import {
   Constants,
   buildTree,
   ContentTypes,
+  parseTextParts,
   isEphemeralAgentId,
   appendAgentIdSuffix,
   encodeEphemeralAgentId,
@@ -373,4 +374,18 @@ export const createDualMessageContent = (
   // Cast through unknown since these are placeholder objects with empty type
   // that will be replaced by real content with proper types from the server
   return [primaryContent, addedContent] as unknown as TMessageContentParts[];
+};
+
+/**
+ * Parses message content for Text-to-Speech, optionally skipping reasoning/thinking blocks.
+ *
+ * @param content - The message content (string or array of content parts)
+ * @param skipReasoning - Whether to skip reasoning/thinking blocks (true = skip, false = include)
+ * @returns The parsed text string for TTS
+ */
+export const parseMessageForTTS = (
+  content: TMessageContentParts[] | string,
+  skipReasoning: boolean,
+): string => {
+  return typeof content === 'string' ? content : parseTextParts(content, skipReasoning);
 };
