@@ -6,6 +6,7 @@ import {
   CacheTTSSwitch,
   AutomaticPlaybackSwitch,
   CloudBrowserVoicesSwitch,
+  IncludeThinkingSwitch,
   PlaybackRate,
 } from '../SettingsTabs/Speech/TTS';
 import {
@@ -439,6 +440,13 @@ export const registry: SettingEntry[] = [
     section: 'tts',
     labelKey: 'com_nav_enable_cache_tts',
     Component: CacheTTSSwitch,
+  },
+  {
+    id: 'includeThinkingInTTS',
+    tab: SPEECH,
+    section: 'tts',
+    labelKey: 'com_nav_include_thinking_tts',
+    Component: IncludeThinkingSwitch,
   },
 
   // Data controls · Memory

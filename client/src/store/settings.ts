@@ -71,6 +71,7 @@ const localStorageAtoms = {
   automaticPlayback: atomWithLocalStorage('automaticPlayback', false),
   playbackRate: atomWithLocalStorage<number | null>('playbackRate', null),
   cacheTTS: atomWithLocalStorage('cacheTTS', true),
+  includeThinkingInTTS: atomWithLocalStorage('includeThinkingInTTS', false),
 
   // Account settings
   UsernameDisplay: atomWithLocalStorage('UsernameDisplay', true),
