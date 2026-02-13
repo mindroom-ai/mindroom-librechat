@@ -19,7 +19,11 @@ function filterModelsByRole(allModels, restrictions) {
   for (const [endpoint, models] of Object.entries(allModels)) {
     if (restrictions[endpoint]) {
       const allowed = new Set(restrictions[endpoint].models);
-      filtered[endpoint] = models.filter((m) => allowed.has(m));
+      const result = models.filter((m) => allowed.has(m));
+      // Omit endpoints with zero allowed models so the UI hides them entirely
+      if (result.length > 0) {
+        filtered[endpoint] = result;
+      }
     } else {
       filtered[endpoint] = models;
     }
