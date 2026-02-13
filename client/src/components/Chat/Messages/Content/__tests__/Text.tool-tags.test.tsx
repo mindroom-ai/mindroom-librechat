@@ -263,4 +263,47 @@ describe('Text tool tag rendering', () => {
 
     expect(screen.getByTestId('tool-call')).toHaveAttribute('data-last', 'true');
   });
+
+  test('renders inline-code tool tags as markdown text, not ToolCall cards', () => {
+    const content = 'Use `<tool>save_file(file=a.py)</tool>` as literal documentation.';
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    expect(screen.queryByTestId('tool-call')).not.toBeInTheDocument();
+    expect(screen.getByTestId('markdown')).toHaveTextContent(content);
+  });
+
+  test('renders fenced-code tool tags as markdown text, not ToolCall cards', () => {
+    const content = ['```txt', '<tool>save_file(file=a.py)\nok</tool>', '```'].join('\n');
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    expect(screen.queryByTestId('tool-call')).not.toBeInTheDocument();
+    const markdown = screen.getByTestId('markdown');
+    expect(markdown.textContent).toContain('```txt');
+    expect(markdown.textContent).toContain('<tool>save_file(file=a.py)');
+    expect(markdown.textContent).toContain('ok</tool>');
+    expect(markdown.textContent).toContain('```');
+  });
+
+  test('keeps fenced examples as markdown and renders real tool tag outside fence', () => {
+    const content = [
+      '```txt',
+      '<tool>example_call()',
+      'example_result</tool>',
+      '```',
+      '',
+      '<tool>run_shell(cmd=pwd)',
+      '/app</tool>',
+    ].join('\n');
+
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    const markdown = screen.getByTestId('markdown');
+    expect(markdown.textContent).toContain('```txt');
+    expect(markdown.textContent).toContain('<tool>example_call()');
+    expect(markdown.textContent).toContain('example_result</tool>');
+    expect(markdown.textContent).toContain('```');
+    const toolCall = screen.getByTestId('tool-call');
+    expect(toolCall).toHaveAttribute('data-name', 'run_shell');
+    expect(toolCall).toHaveAttribute('data-output', '/app');
+  });
 });

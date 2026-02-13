@@ -168,4 +168,47 @@ describe('parseToolTags', () => {
       { type: 'text', text: '\n\nC' },
     ]);
   });
+
+  test('does not parse tool tags inside inline markdown code spans', () => {
+    const input = 'Use `<tool>save_file(file=a.py)</tool>` as an example.';
+    expect(parseToolTags(input)).toEqual([{ type: 'text', text: input }]);
+  });
+
+  test('does not parse tool tags inside fenced markdown code blocks', () => {
+    const input = [
+      '```xml',
+      '<tool>save_file(file=a.py)',
+      'ok</tool>',
+      '```',
+      '',
+      'This is documentation text.',
+    ].join('\n');
+
+    expect(parseToolTags(input)).toEqual([{ type: 'text', text: input }]);
+  });
+
+  test('parses tool tags outside fenced code blocks while keeping fenced examples as text', () => {
+    const input = [
+      '```txt',
+      '<tool>example_call()',
+      'example_result</tool>',
+      '```',
+      '',
+      '<tool>run_shell(cmd=pwd)',
+      '/app</tool>',
+    ].join('\n');
+
+    expect(parseToolTags(input)).toEqual([
+      {
+        type: 'text',
+        text: '```txt\n<tool>example_call()\nexample_result</tool>\n```\n\n',
+      },
+      {
+        type: 'tool',
+        call: 'run_shell(cmd=pwd)',
+        result: '/app',
+        raw: 'run_shell(cmd=pwd)\n/app',
+      },
+    ]);
+  });
 });
