@@ -161,7 +161,8 @@ export const tokenConfig = () => `${BASE_URL}/api/endpoints/token-config`;
 
 export const contextProjection = () => `${BASE_URL}/api/endpoints/context-projection`;
 
-export const models = () => `${BASE_URL}/api/models`;
+export const models = (refresh = false) =>
+  `${BASE_URL}/api/models${refresh ? '?refresh=true' : ''}`;
 
 export const tokenizer = () => `${BASE_URL}/api/tokenizer`;
 

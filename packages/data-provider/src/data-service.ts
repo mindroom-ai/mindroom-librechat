@@ -265,8 +265,8 @@ export const getContextProjection = (
   return request.post(endpoints.contextProjection(), payload);
 };
 
-export const getModels = async (): Promise<t.TModelsConfig> => {
-  return request.get(endpoints.models());
+export const getModels = async (refresh = false): Promise<t.TModelsConfig> => {
+  return request.get(endpoints.models(refresh));
 };
 
 /* Assistants */
