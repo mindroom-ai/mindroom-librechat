@@ -1,12 +1,13 @@
 # Feature: Per-Role Model Permissions Per Endpoint
 
-## Commit
+## Commits
 
 - `3a5519374` feat: add per-role model permissions per endpoint (#13)
+- `a63102802` fix: hide endpoints entirely when all models are blocked (#20)
 
 ## Provenance
 
-- Fork PR: <https://github.com/mindroom-ai/mindroom-librechat/pull/13>
+- Fork PRs: [#13](https://github.com/mindroom-ai/mindroom-librechat/pull/13), [#20](https://github.com/mindroom-ai/mindroom-librechat/pull/20)
 - Upstream PR: none (fork-only feature)
 
 ## Why
@@ -59,7 +60,7 @@ roles:
 - **No `roles` section at all** → every user sees every model (existing behavior).
 - **Role has no entry** (e.g., `ADMIN` above) → no restrictions, sees all models.
 - **Role has an endpoint with a models list** → only those models are visible for that endpoint. Other endpoints without an entry remain unrestricted.
-- **Role has an endpoint with empty models `[]`** → that endpoint is blocked entirely (no models shown).
+- **Role has an endpoint with empty models `[]`** → that endpoint is omitted from the API response entirely. The UI hides the endpoint (no menu item shown), rather than showing an empty submenu.
 - Built-in endpoint names (`openAI`, `google`, `anthropic`, `azureOpenAI`, `assistants`, `azureAssistants`, `agents`, `bedrock`) are validated with strict mode — typos are rejected at startup.
 - Custom endpoint names go under the `custom:` key and are normalized via `normalizeEndpointName()`.
 
@@ -91,6 +92,7 @@ librechat.yaml         (1) parsed by zod configSchema at startup
    - Reads `req.user.role` (set by auth middleware, not user-controllable).
    - Checks the per-role cache (`MODELS_CONFIG:USER`, `MODELS_CONFIG:ADMIN`, etc.).
    - On cache miss, loads the base (unfiltered) model list from all configured providers, then calls `filterModelsByRole()` to intersect with the role's allowed models.
+   - Endpoints where all models are blocked (empty `models: []`) are omitted from the result entirely, so the UI never renders an empty menu item.
    - Caches the filtered result for that role.
    - Supports `refresh=true` query param to bypass cache (from the model-selector-refresh feature).
 
