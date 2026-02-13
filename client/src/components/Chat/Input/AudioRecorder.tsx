@@ -1,4 +1,5 @@
 import { memo, useCallback, useRef } from 'react';
+import type { RefObject } from 'react';
 import { MicOff } from 'lucide-react';
 import { useToastContext, TooltipAnchor, ListeningIcon, Spinner } from '@librechat/client';
 import { useLocalize, useSpeechToText, useGetAudioSettings } from '~/hooks';
@@ -11,11 +12,13 @@ export default memo(function AudioRecorder({
   disabled,
   ask,
   methods,
+  textAreaRef,
   isSubmitting,
 }: {
   disabled: boolean;
   ask: TAskFunction;
   methods: ReturnType<typeof useChatFormContext>;
+  textAreaRef: RefObject<HTMLTextAreaElement>;
   isSubmitting: boolean;
 }) {
   const { setValue, reset, getValues } = methods;
@@ -60,19 +63,21 @@ export default memo(function AudioRecorder({
 
   const setText = useCallback(
     (text: string) => {
-      let newText = text;
-      if (isExternalSTT(speechToTextEndpoint)) {
-        /** For external STT, the text comes as a complete transcription, so append to existing */
-        newText = existingTextRef.current ? `${existingTextRef.current} ${text}` : text;
-      } else {
-        /** For browser STT, the transcript is cumulative, so we only need to prepend the existing text once */
-        newText = existingTextRef.current ? `${existingTextRef.current} ${text}` : text;
+      const textarea = textAreaRef.current;
+
+      if (textarea) {
+        textarea.focus();
+        textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, 'end');
+        setValue('text', textarea.value, { shouldValidate: true });
+        return;
       }
-      setValue('text', newText, {
+
+      // Fallback: if textarea isn't mounted yet, just set the value
+      setValue('text', text, {
         shouldValidate: true,
       });
     },
-    [setValue, speechToTextEndpoint],
+    [setValue, textAreaRef],
   );
 
   const { isListening, isLoading, startRecording, stopRecording } = useSpeechToText(
