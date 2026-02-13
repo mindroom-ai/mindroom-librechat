@@ -2,7 +2,7 @@
 
 ## Provenance
 
-- Fork PR: #19
+- Fork PRs: [#19](https://github.com/mindroom-ai/mindroom-librechat/pull/19), [#20](https://github.com/mindroom-ai/mindroom-librechat/pull/20)
 - Upstream PR: none (fork-only feature)
 - Depends on: role-based model permissions (PR #13)
 
@@ -83,27 +83,30 @@ Client receives only allowed models
 
 3. **Group resolution**: `applyGroupBasedConfig()` iterates the user's groups, looks each up in `baseConfig.groups`, and builds a union of all matching endpoint restrictions using `flattenEndpointRestrictions()`.
 
-4. **Filtering**: `filterModelsByRole()` intersects the union restrictions with the available models per endpoint.
+4. **Filtering**: `filterModelsByRole()` intersects the union restrictions with the available models per endpoint. Endpoints where all models are blocked (empty `models: []` or no models survive filtering) are omitted from the result entirely — the UI hides the endpoint rather than showing an empty submenu.
 
-5. **Caching**: Group-based results are cached per sorted group combination in `ModelController` (key: `MODELS_CONFIG:g:group1,group2`). They are not cached in `getAppConfig` since group combinations are per-user.
+5. **Caching**: Group-based results are cached per sorted group combination in `ModelController` (key: `MODELS_CONFIG:g:ROLE:["group-a","group-b"]`). The key includes the role to prevent cross-role cache poisoning, and uses `JSON.stringify` on sorted groups to avoid collisions from group names containing commas. Group cache entries have a 10-minute TTL to prevent unbounded memory growth. They are not cached in `getAppConfig` since group combinations are per-user.
 
 ## Key files
 
 | File | What it does |
 |------|-------------|
-| `api/strategies/openidStrategy.js` | Extracts groups from OIDC token, stores on user |
-| `api/server/services/Config/app.js` | `applyGroupBasedConfig()` — union logic |
-| `api/server/controllers/ModelController.js` | Per-group cache key, passes groups to `getAppConfig` |
+| `api/strategies/openidStrategy.js` | Extracts groups from OIDC token, stores on user. Clears stale groups when extraction env vars are removed. |
+| `api/server/services/Config/app.js` | `applyGroupBasedConfig()` — union logic. Skips per-role cache when groups present to avoid stale results. |
+| `api/server/controllers/ModelController.js` | `filterModelsByRole()` (omits blocked endpoints), per-group cache key with role + JSON groups, 10-min TTL |
 | `packages/data-provider/src/config.ts` | `groupsConfigSchema` — YAML schema validation |
 | `packages/data-schemas/src/app/service.ts` | Passes `groups` through AppService |
 | `packages/data-schemas/src/schema/user.ts` | `openidGroups` field on User document |
+| `packages/data-schemas/src/types/user.ts` | `openidGroups` on `IUser` interface |
 
 ## Tests
 
 | File | Count | What it covers |
 |------|-------|---------------|
 | `api/strategies/openidStrategy.spec.js` | 6 tests | Group extraction from tokens (id/access/userinfo, nested paths, single string) |
-| `api/server/services/Config/__tests__/roleModelPermissions.integration.spec.js` | 9 tests | Schema validation (4) + end-to-end group filtering (5) |
+| `api/server/services/Config/__tests__/roleModelPermissions.integration.spec.js` | 23 tests | Schema validation (4 role + 4 group) + end-to-end filtering (14) + cache regression (1) |
+| `api/server/controllers/ModelController.spec.js` | 7 group tests | Group cache keys, sorted consistency, cross-role isolation, cache miss compute, getAppConfig passthrough, empty/undefined groups fallback |
+| `api/server/routes/__tests__/models.spec.js` | 8 tests | Full HTTP path (supertest): no restrictions, role-based, group union, group precedence, role fallback, cross-role isolation, overlapping unions, empty models blocking |
 
 ## User-visible result
 
