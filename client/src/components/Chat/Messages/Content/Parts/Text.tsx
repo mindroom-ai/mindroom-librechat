@@ -34,29 +34,28 @@ const TextPart = memo(({ text, isCreatedByUser, showCursor }: TextPartProps) => 
       }
 
       // Mixed content: render text segments via Markdown, tool segments via ToolCall
+      const filtered = segments.filter((s) => !(s.type === 'text' && !s.text.trim()));
       return (
         <>
-          {segments
-            .filter((s) => !(s.type === 'text' && !s.text.trim()))
-            .map((segment, index) =>
-              segment.type === 'text' ? (
-                <Markdown
-                  key={`text-${index}`}
-                  content={segment.text}
-                  isLatestMessage={isLatestMessage}
-                />
-              ) : (
-                <ToolCall
-                  key={`tool-${index}`}
-                  name={segment.name}
-                  args={segment.call}
-                  output={segment.result ?? undefined}
-                  initialProgress={segment.result === null ? 0.1 : 1}
-                  isSubmitting={isSubmitting}
-                  isLast={index === segments.length - 1 && isLatestMessage}
-                />
-              ),
-            )}
+          {filtered.map((segment, index) =>
+            segment.type === 'text' ? (
+              <Markdown
+                key={`text-${index}`}
+                content={segment.text}
+                isLatestMessage={isLatestMessage}
+              />
+            ) : (
+              <ToolCall
+                key={`tool-${index}`}
+                name={segment.name}
+                args={segment.call}
+                output={segment.result ?? undefined}
+                initialProgress={segment.result === null ? 0.1 : 1}
+                isSubmitting={isSubmitting}
+                isLast={index === filtered.length - 1 && isLatestMessage}
+              />
+            ),
+          )}
         </>
       );
     } else if (enableUserMsgMarkdown) {

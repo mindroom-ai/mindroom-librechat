@@ -156,6 +156,18 @@ ok</tool>
         expect(result[0].call).toBe('save_file(msg="hello")');
       }
     });
+
+    it('should decode numeric and hex entity references', () => {
+      // &#60; = <, &#x3E; = >, &#38; = &
+      const input = '<tool>save_file(x=&#60;b&#x3E;)\n&#38;ok</tool>';
+      const result = parseToolTags(input);
+
+      expect(result[0].type).toBe('tool');
+      if (result[0].type === 'tool') {
+        expect(result[0].call).toBe('save_file(x=<b>)');
+        expect(result[0].result).toBe('&ok');
+      }
+    });
   });
 
   describe('empty and trivial inputs', () => {

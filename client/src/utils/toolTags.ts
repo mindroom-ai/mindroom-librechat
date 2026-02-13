@@ -25,17 +25,51 @@ const TOOL_GROUP_OPEN = '<tool-group>';
 const TOOL_GROUP_CLOSE = '</tool-group>';
 
 /**
- * Decode common HTML entities that the backend applies to inner content.
+ * Decode HTML entities in tool content. Handles named entities (&amp;, &lt;,
+ * &gt;, &quot;, &apos;, &#39;) and arbitrary numeric/hex references (&#60;,
+ * &#x3C;, etc.).
  */
 function decodeHTMLEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, '/');
+  if (!text.includes('&')) {
+    return text;
+  }
+
+  return text.replace(
+    /&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos|#39);/g,
+    (match, entity: string) => {
+      if (entity === 'amp') {
+        return '&';
+      }
+      if (entity === 'lt') {
+        return '<';
+      }
+      if (entity === 'gt') {
+        return '>';
+      }
+      if (entity === 'quot') {
+        return '"';
+      }
+      if (entity === 'apos' || entity === '#39') {
+        return "'";
+      }
+
+      if (!entity.startsWith('#')) {
+        return match;
+      }
+
+      const isHex = entity.startsWith('#x');
+      const codePoint = Number.parseInt(entity.slice(isHex ? 2 : 1), isHex ? 16 : 10);
+      if (!Number.isFinite(codePoint) || codePoint < 0) {
+        return match;
+      }
+
+      try {
+        return String.fromCodePoint(codePoint);
+      } catch {
+        return match;
+      }
+    },
+  );
 }
 
 /**
