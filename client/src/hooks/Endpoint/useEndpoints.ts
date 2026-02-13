@@ -9,6 +9,7 @@ import {
   PermissionTypes,
   getEndpointField,
   getConfigDefaults,
+  isAssistantsEndpoint,
 } from 'librechat-data-provider';
 import type {
   TEndpointsConfig,
@@ -126,7 +127,9 @@ export const useEndpoints = ({
           ep !== EModelEndpoint.agents &&
           (modelsQuery.data?.[ep]?.length ?? 0) > 0);
 
-      if (ep === EModelEndpoint.agents && !hasModels) {
+      // Hide endpoints with no models (e.g., blocked by role-based permissions).
+      // Keep assistants endpoints which lazy-load their models on first click.
+      if (!hasModels && !isAssistantsEndpoint(ep)) {
         return acc;
       }
 
