@@ -1,4 +1,4 @@
-const { CacheKeys } = require('librechat-data-provider');
+const { CacheKeys, normalizeEndpointName } = require('librechat-data-provider');
 const { logger, AppService } = require('@librechat/data-schemas');
 const { loadAndFormatTools } = require('~/server/services/start/tools');
 const loadCustomConfig = require('./loadCustomConfig');
@@ -56,16 +56,48 @@ async function getAppConfig(options = {}) {
     await cache.set(BASE_CONFIG_KEY, baseConfig);
   }
 
-  // For now, return the base config
-  // In the future, this is where we'll apply role-based modifications
   if (role) {
-    // TODO: Apply role-based config modifications
-    // const roleConfig = await applyRoleBasedConfig(baseConfig, role);
-    // await cache.set(cacheKey, roleConfig);
-    // return roleConfig;
+    const roleConfig = applyRoleBasedConfig(baseConfig, role);
+    if (roleConfig !== baseConfig) {
+      await cache.set(cacheKey, roleConfig);
+      return roleConfig;
+    }
   }
 
   return baseConfig;
+}
+
+/**
+ * Apply role-based restrictions to the base config.
+ * Returns baseConfig unchanged if the role has no restrictions.
+ * @param {AppConfig} baseConfig
+ * @param {string} role
+ * @returns {AppConfig}
+ */
+function applyRoleBasedConfig(baseConfig, role) {
+  const rolesConfig = baseConfig.roles;
+  if (!rolesConfig) {
+    return baseConfig;
+  }
+
+  const roleEntry = rolesConfig[role];
+  if (!roleEntry || !roleEntry.endpoints) {
+    return baseConfig;
+  }
+
+  const restrictions = {};
+  for (const [key, value] of Object.entries(roleEntry.endpoints)) {
+    if (key === 'custom' && typeof value === 'object') {
+      for (const [customName, customValue] of Object.entries(value)) {
+        const normalized = normalizeEndpointName(customName);
+        restrictions[normalized] = customValue;
+      }
+    } else {
+      restrictions[key] = value;
+    }
+  }
+
+  return { ...baseConfig, _roleModelRestrictions: restrictions };
 }
 
 /**

@@ -94,6 +94,10 @@ export interface AppConfig {
   modelSpecs?: TCustomConfig['modelSpecs'];
   /** Available tools */
   availableTools?: Record<string, FunctionTool>;
+  /** Role-based model access configuration (from librechat.yaml) */
+  roles?: TCustomConfig['roles'];
+  /** Active role model restrictions (set by applyRoleBasedConfig for the current user's role) */
+  _roleModelRestrictions?: Record<string, { models: string[] }>;
   endpoints?: {
     /** OpenAI endpoint configuration */
     openAI?: Partial<TEndpoint>;
