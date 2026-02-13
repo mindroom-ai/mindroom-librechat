@@ -182,4 +182,85 @@ describe('Text tool tag rendering', () => {
 
     expect(screen.getByTestId('tool-call')).toHaveAttribute('data-state', 'cancelled');
   });
+
+  test('uses markdown fast path when no tool tags are present', () => {
+    render(
+      <Text
+        text={'# Hello World\n\nThis is plain markdown.'}
+        isCreatedByUser={false}
+        showCursor={false}
+      />,
+    );
+
+    expect(screen.getByTestId('markdown')).toHaveTextContent('# Hello World');
+    expect(screen.queryByTestId('tool-call')).not.toBeInTheDocument();
+  });
+
+  test('renders tools inside tool-group as separate ToolCall cards', () => {
+    render(
+      <Text
+        text={
+          '<tool-group>\n<tool>save_file(file=a.py)\nok</tool>\n\n<tool>run_shell(cmd=pwd)\n/app</tool>\n</tool-group>'
+        }
+        isCreatedByUser={false}
+        showCursor={false}
+      />,
+    );
+
+    const toolCalls = screen.getAllByTestId('tool-call');
+    expect(toolCalls).toHaveLength(2);
+    expect(toolCalls[0]).toHaveAttribute('data-name', 'save_file');
+    expect(toolCalls[0]).toHaveAttribute('data-output', 'ok');
+    expect(toolCalls[1]).toHaveAttribute('data-name', 'run_shell');
+    expect(toolCalls[1]).toHaveAttribute('data-output', '/app');
+  });
+
+  test('renders unclosed tool fragments as plain markdown text', () => {
+    const text = 'Hello <tool>save_file(file=a.py)';
+    render(<Text text={text} isCreatedByUser={false} showCursor={false} />);
+
+    expect(screen.queryByTestId('tool-call')).not.toBeInTheDocument();
+    expect(screen.getByTestId('markdown')).toHaveTextContent(text);
+  });
+
+  test('decodes HTML entities in tool args and output before rendering ToolCall', () => {
+    render(
+      <Text
+        text={'<tool>save_file(content=&lt;div&gt;hello&lt;/div&gt;)\n&amp;done</tool>'}
+        isCreatedByUser={false}
+        showCursor={false}
+      />,
+    );
+
+    const toolCall = screen.getByTestId('tool-call');
+    expect(toolCall).toHaveAttribute('data-args', 'save_file(content=<div>hello</div>)');
+    expect(toolCall).toHaveAttribute('data-output', '&done');
+  });
+
+  test('derives tool name from call even when no parenthesis is present', () => {
+    render(<Text text={'<tool>save_file\nok</tool>'} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCall = screen.getByTestId('tool-call');
+    expect(toolCall).toHaveAttribute('data-name', 'save_file');
+    expect(toolCall).toHaveAttribute('data-args', 'save_file');
+  });
+
+  test('falls back to tool name "tool" for empty or invalid call prefix', () => {
+    render(<Text text={'<tool>(weird)\nok</tool>'} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCall = screen.getByTestId('tool-call');
+    expect(toolCall).toHaveAttribute('data-name', 'tool');
+  });
+
+  test('marks the last tool as isLast even when trailing whitespace text is filtered', () => {
+    render(
+      <Text
+        text={'<tool>save_file(file=a.py)\nok</tool>\n\n'}
+        isCreatedByUser={false}
+        showCursor={false}
+      />,
+    );
+
+    expect(screen.getByTestId('tool-call')).toHaveAttribute('data-last', 'true');
+  });
 });
