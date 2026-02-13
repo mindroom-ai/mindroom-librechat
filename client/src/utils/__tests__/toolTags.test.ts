@@ -212,58 +212,9 @@ describe('parseToolTags', () => {
     ]);
   });
 
-  test('attaches trailing Result line to previous tool when result is outside the tag', () => {
+  test('treats trailing Result line outside tool tag as plain text', () => {
     const segments = parseToolTags(
       '<tool>list_entities(domain=light)</tool>\nResult: [{"entity_id":"light.kitchen"}]',
-    );
-
-    expect(segments).toEqual([
-      {
-        type: 'tool',
-        call: 'list_entities(domain=light)',
-        result: '[{"entity_id":"light.kitchen"}]',
-        raw: 'list_entities(domain=light)',
-      },
-    ]);
-  });
-
-  test('uses trailing function-call line as call when tool tag contains assistant label', () => {
-    const segments = parseToolTags(
-      '<tool>Assistant used list_entities</tool>\nlist_entities(domain=light)\nResult: [{"entity_id":"light.kitchen"}]',
-    );
-
-    expect(segments).toEqual([
-      {
-        type: 'tool',
-        call: 'list_entities(domain=light)',
-        result: '[{"entity_id":"light.kitchen"}]',
-        raw: 'Assistant used list_entities',
-      },
-    ]);
-  });
-
-  test('keeps following prose after external Result as text', () => {
-    const segments = parseToolTags(
-      '<tool>list_entities(domain=light)</tool>\nResult: [{"entity_id":"light.kitchen"}]\n\nLights checked.',
-    );
-
-    expect(segments).toEqual([
-      {
-        type: 'tool',
-        call: 'list_entities(domain=light)',
-        result: '[{"entity_id":"light.kitchen"}]',
-        raw: 'list_entities(domain=light)',
-      },
-      {
-        type: 'text',
-        text: '\n\nLights checked.',
-      },
-    ]);
-  });
-
-  test('does not consume ordinary following text when no Result line is present', () => {
-    const segments = parseToolTags(
-      '<tool>list_entities(domain=light)</tool>\nI will summarize the result next.',
     );
 
     expect(segments).toEqual([
@@ -275,24 +226,26 @@ describe('parseToolTags', () => {
       },
       {
         type: 'text',
-        text: '\nI will summarize the result next.',
+        text: '\nResult: [{"entity_id":"light.kitchen"}]',
       },
     ]);
   });
 
-  test('does not absorb follow-up assistant prose after external Result line', () => {
-    const segments = parseToolTags('<tool>list_entities(domain=light)</tool>\nResult: ok\nDone.');
+  test('treats trailing call+Result lines outside tool tag as plain text', () => {
+    const segments = parseToolTags(
+      '<tool>Assistant used list_entities</tool>\nlist_entities(domain=light)\nResult: [{"entity_id":"light.kitchen"}]',
+    );
 
     expect(segments).toEqual([
       {
         type: 'tool',
-        call: 'list_entities(domain=light)',
-        result: 'ok',
-        raw: 'list_entities(domain=light)',
+        call: 'Assistant used list_entities',
+        result: null,
+        raw: 'Assistant used list_entities',
       },
       {
         type: 'text',
-        text: '\nDone.',
+        text: '\nlist_entities(domain=light)\nResult: [{"entity_id":"light.kitchen"}]',
       },
     ]);
   });
