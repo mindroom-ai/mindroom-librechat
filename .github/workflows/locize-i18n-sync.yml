@@ -10,7 +10,21 @@ jobs:
   sync-translations:
     name: Sync Translation Keys with Locize
     runs-on: ubuntu-latest
+    outputs:
+      has_locize_secrets: ${{ steps.check-locize-secrets.outputs.has_locize_secrets }}
     steps:
+      - name: Check Locize secrets
+        id: check-locize-secrets
+        env:
+          LOCIZE_API_KEY: ${{ secrets.LOCIZE_API_KEY }}
+          LOCIZE_PROJECT_ID: ${{ secrets.LOCIZE_PROJECT_ID }}
+        run: |
+          if [ -n "$LOCIZE_API_KEY" ] && [ -n "$LOCIZE_PROJECT_ID" ]; then
+            echo "has_locize_secrets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_locize_secrets=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -24,13 +38,13 @@ jobs:
 
       # Sync translations (Push missing keys & remove deleted ones)
       - name: Sync Locize with Repository
-        if: ${{ github.event_name == 'push' && secrets.LOCIZE_API_KEY != '' && secrets.LOCIZE_PROJECT_ID != '' }}
+        if: ${{ github.event_name == 'push' && steps.check-locize-secrets.outputs.has_locize_secrets == 'true' }}
         run: |
           cd client/src/locales
           locize sync --api-key ${{ secrets.LOCIZE_API_KEY }} --project-id ${{ secrets.LOCIZE_PROJECT_ID }} --language en
 
       - name: Skip sync step on push when Locize secrets are missing
-        if: ${{ github.event_name == 'push' && (secrets.LOCIZE_API_KEY == '' || secrets.LOCIZE_PROJECT_ID == '') }}
+        if: ${{ github.event_name == 'push' && steps.check-locize-secrets.outputs.has_locize_secrets != 'true' }}
         run: |
           echo "Skipping locize sync because LOCIZE_API_KEY or LOCIZE_PROJECT_ID is not configured."
 
@@ -42,8 +56,8 @@ jobs:
   create-pull-request:
     name: Create Translation PR on Version Published
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'repository_dispatch' && secrets.LOCIZE_API_KEY != '' && secrets.LOCIZE_PROJECT_ID != '' }}
     needs: sync-translations
+    if: ${{ github.event_name == 'repository_dispatch' && needs.sync-translations.outputs.has_locize_secrets == 'true' }}
     permissions:
       contents: write
       pull-requests: write
