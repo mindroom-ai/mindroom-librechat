@@ -20,14 +20,20 @@ const getModelsConfig = async (req) => {
 /**
  * Loads the models from the config.
  * @param {ServerRequest} req - The Express request object.
+ * @param {Object} [options]
+ * @param {boolean} [options.refresh=false] - Force-refresh models instead of reading cached config.
  * @returns {Promise<TModelsConfig>} The models config.
  */
-async function loadModels(req) {
+async function loadModels(req, options = {}) {
+  const { refresh = false } = options;
   const cache = getLogStores(CacheKeys.CONFIG_STORE);
-  const cachedModelsConfig = await cache.get(CacheKeys.MODELS_CONFIG);
-  if (cachedModelsConfig) {
-    return cachedModelsConfig;
+  if (!refresh) {
+    const cachedModelsConfig = await cache.get(CacheKeys.MODELS_CONFIG);
+    if (cachedModelsConfig) {
+      return cachedModelsConfig;
+    }
   }
+
   const defaultModelsConfig = await loadDefaultModels(req);
   const customModelsConfig = await loadConfigModels(req);
 
@@ -39,7 +45,8 @@ async function loadModels(req) {
 
 async function modelController(req, res) {
   try {
-    const modelConfig = await loadModels(req);
+    const refresh = req.query?.refresh === 'true' || req.query?.refresh === '1';
+    const modelConfig = await loadModels(req, { refresh });
     res.send(modelConfig);
   } catch (error) {
     logger.error('Error fetching models:', error);

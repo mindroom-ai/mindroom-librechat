@@ -218,8 +218,8 @@ export const getAIEndpoints = (): Promise<t.TEndpointsConfig> => {
   return request.get(endpoints.aiEndpoints());
 };
 
-export const getModels = async (): Promise<t.TModelsConfig> => {
-  return request.get(endpoints.models());
+export const getModels = async (refresh = false): Promise<t.TModelsConfig> => {
+  return request.get(endpoints.models(refresh));
 };
 
 /* Assistants */
