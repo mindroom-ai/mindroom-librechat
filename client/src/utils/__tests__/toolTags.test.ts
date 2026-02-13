@@ -211,4 +211,42 @@ describe('parseToolTags', () => {
       },
     ]);
   });
+
+  test('treats trailing Result line outside tool tag as plain text', () => {
+    const segments = parseToolTags(
+      '<tool>list_entities(domain=light)</tool>\nResult: [{"entity_id":"light.kitchen"}]',
+    );
+
+    expect(segments).toEqual([
+      {
+        type: 'tool',
+        call: 'list_entities(domain=light)',
+        result: null,
+        raw: 'list_entities(domain=light)',
+      },
+      {
+        type: 'text',
+        text: '\nResult: [{"entity_id":"light.kitchen"}]',
+      },
+    ]);
+  });
+
+  test('treats trailing call+Result lines outside tool tag as plain text', () => {
+    const segments = parseToolTags(
+      '<tool>Assistant used list_entities</tool>\nlist_entities(domain=light)\nResult: [{"entity_id":"light.kitchen"}]',
+    );
+
+    expect(segments).toEqual([
+      {
+        type: 'tool',
+        call: 'Assistant used list_entities',
+        result: null,
+        raw: 'Assistant used list_entities',
+      },
+      {
+        type: 'text',
+        text: '\nlist_entities(domain=light)\nResult: [{"entity_id":"light.kitchen"}]',
+      },
+    ]);
+  });
 });

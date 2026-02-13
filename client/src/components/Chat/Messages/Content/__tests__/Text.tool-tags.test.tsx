@@ -312,4 +312,19 @@ describe('Text tool tag rendering', () => {
     expect(toolCall).toHaveAttribute('data-name', 'run_shell');
     expect(toolCall).toHaveAttribute('data-output', '/app');
   });
+
+  test('renders trailing Result line outside tool tag as markdown text', () => {
+    const content =
+      '<tool>list_entities(domain=light)</tool>\nResult: [{"entity_id":"light.kitchen"}]';
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCall = screen.getByTestId('tool-call');
+    expect(toolCall).toHaveAttribute('data-name', 'list_entities');
+    expect(toolCall).toHaveAttribute('data-args', 'list_entities(domain=light)');
+    expect(toolCall).toHaveAttribute('data-output', '');
+    expect(toolCall).toHaveAttribute('data-progress', '0.1');
+
+    const markdown = screen.getByTestId('markdown');
+    expect(markdown.textContent).toContain('Result: [{"entity_id":"light.kitchen"}]');
+  });
 });
