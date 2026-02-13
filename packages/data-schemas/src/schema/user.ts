@@ -77,6 +77,10 @@ const userSchema: Schema<IUser> = new Schema<IUser>(
     openidIssuer: {
       type: String,
     },
+    openidGroups: {
+      type: [String],
+      default: undefined,
+    },
     samlId: {
       type: String,
     },
