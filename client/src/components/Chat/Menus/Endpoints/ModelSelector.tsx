@@ -31,9 +31,10 @@ function ModelSelectorContent() {
     // Functions
     setSearchValue,
     setSelectedValues,
+    refreshModels,
     // Dialog
     keyDialogOpen,
-    onOpenChange,
+    onOpenChange: onDialogOpenChange,
     keyDialogEndpoint,
   } = useModelSelectorContext();
 
@@ -91,6 +92,11 @@ function ModelSelectorContent() {
           });
         }}
         onSearch={(value) => setSearchValue(value)}
+        onOpenChange={(open) => {
+          if (open) {
+            void refreshModels();
+          }
+        }}
         combobox={<input id="model-search" placeholder=" " />}
         comboboxLabel={localize('com_endpoint_search_models')}
         trigger={trigger}
@@ -113,7 +119,7 @@ function ModelSelectorContent() {
       </Menu>
       <DialogManager
         keyDialogOpen={keyDialogOpen}
-        onOpenChange={onOpenChange}
+        onOpenChange={onDialogOpenChange}
         endpointsConfig={endpointsConfig || {}}
         keyDialogEndpoint={keyDialogEndpoint || undefined}
       />

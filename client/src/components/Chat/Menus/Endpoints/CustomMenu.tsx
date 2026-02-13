@@ -6,6 +6,7 @@ export interface CustomMenuProps extends Ariakit.MenuButtonProps<'div'> {
   label?: React.ReactNode;
   values?: Record<string, any>;
   onValuesChange?: (values: Record<string, any>) => void;
+  onOpenChange?: (open: boolean) => void;
   searchValue?: string;
   onSearch?: (value: string) => void;
   combobox?: Ariakit.ComboboxProps['render'];
@@ -20,6 +21,7 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
     children,
     values,
     onValuesChange,
+    onOpenChange,
     searchValue,
     onSearch,
     combobox,
@@ -38,6 +40,11 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
     placement: parent ? 'right' : 'left',
     defaultOpen: defaultOpen,
   });
+  const open = menuStore.useState('open');
+
+  React.useEffect(() => {
+    onOpenChange?.(open);
+  }, [onOpenChange, open]);
 
   const element = (
     <Ariakit.MenuProvider store={menuStore} values={values} setValues={onValuesChange}>
@@ -58,7 +65,7 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
         <Ariakit.MenuButtonArrow className="stroke-1 text-base opacity-75" />
       </Ariakit.MenuButton>
       <Ariakit.Menu
-        open={menuStore.useState('open')}
+        open={open}
         portal
         overlap
         unmountOnHide
