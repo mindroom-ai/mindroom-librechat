@@ -70,6 +70,11 @@ jest.mock('recoil', () => ({
 const mockUseMessageContext = useMessageContext as jest.MockedFunction<typeof useMessageContext>;
 const mockUseRecoilValue = useRecoilValue as jest.MockedFunction<typeof useRecoilValue>;
 
+const toolStart = (id: number | string, call: string) =>
+  `<tool id="${id}" state="start">${call}</tool>`;
+const toolDone = (id: number | string, call: string, result: string) =>
+  `<tool id="${id}" state="done">${call}\n${result}</tool>`;
+
 describe('Text tool tag rendering', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -77,21 +82,26 @@ describe('Text tool tag rendering', () => {
     mockUseRecoilValue.mockReturnValue(true as never);
   });
 
-  test('renders pending tool as a ToolCall card and hides raw tool tags', () => {
+  test('renders start tool as a ToolCall card and hides raw tags', () => {
     render(
-      <Text text="<tool>save_file(file=a.py)</tool>" isCreatedByUser={false} showCursor={false} />,
+      <Text
+        text={toolStart(1, 'save_file(file=a.py)')}
+        isCreatedByUser={false}
+        showCursor={false}
+      />,
     );
 
     const toolCall = screen.getByTestId('tool-call');
     expect(toolCall).toBeInTheDocument();
     expect(toolCall).toHaveAttribute('data-progress', '0.1');
-    expect(screen.queryByText(/<tool>/)).not.toBeInTheDocument();
+    expect(toolCall).toHaveAttribute('data-output', '');
+    expect(screen.queryByText(/<tool/)).not.toBeInTheDocument();
   });
 
-  test('renders completed tool output in ToolCall', () => {
+  test('renders done tool output in ToolCall', () => {
     render(
       <Text
-        text={'<tool>save_file(file=a.py)\nok</tool>'}
+        text={toolDone(1, 'save_file(file=a.py)', 'ok')}
         isCreatedByUser={false}
         showCursor={false}
       />,
@@ -103,10 +113,10 @@ describe('Text tool tag rendering', () => {
     expect(toolCall).toHaveAttribute('data-progress', '1');
   });
 
-  test('renders completed empty-result tool as completed state', () => {
+  test('renders done empty-result tool as completed state', () => {
     render(
       <Text
-        text={'<tool>save_file(file=a.py)\n</tool>'}
+        text={toolDone(1, 'save_file(file=a.py)', '')}
         isCreatedByUser={false}
         showCursor={false}
       />,
@@ -120,7 +130,10 @@ describe('Text tool tag rendering', () => {
   test('renders consecutive tools as separate cards', () => {
     render(
       <Text
-        text="<tool>save_file(file=a.py)\nok</tool><tool>run_shell(cmd=pwd)\n/app</tool>"
+        text={[
+          toolDone(1, 'save_file(file=a.py)', 'ok'),
+          toolDone(2, 'run_shell(cmd=pwd)', '/app'),
+        ].join('')}
         isCreatedByUser={false}
         showCursor={false}
       />,
@@ -135,7 +148,7 @@ describe('Text tool tag rendering', () => {
   test('preserves surrounding markdown for mixed text and tool content', () => {
     render(
       <Text
-        text={'Before **bold**\n\n<tool>save_file(file=a.py)\nok</tool>\n\nAfter _text_'}
+        text={`Before **bold**\n\n${toolDone(1, 'save_file(file=a.py)', 'ok')}\n\nAfter _text_`}
         isCreatedByUser={false}
         showCursor={false}
       />,
@@ -150,25 +163,33 @@ describe('Text tool tag rendering', () => {
 
   test('keeps user message rendering path unchanged', () => {
     render(
-      <Text text="<tool>save_file(file=a.py)</tool>" isCreatedByUser={true} showCursor={false} />,
+      <Text
+        text={toolStart(1, 'save_file(file=a.py)')}
+        isCreatedByUser={true}
+        showCursor={false}
+      />,
     );
 
     expect(screen.queryByTestId('tool-call')).not.toBeInTheDocument();
     expect(screen.getByTestId('markdown-lite')).toHaveTextContent(
-      '<tool>save_file(file=a.py)</tool>',
+      toolStart(1, 'save_file(file=a.py)'),
     );
   });
 
-  test('updates pending tool to completed tool on rerender', () => {
+  test('updates start tool to done tool on rerender', () => {
     const { rerender } = render(
-      <Text text="<tool>save_file(file=a.py)</tool>" isCreatedByUser={false} showCursor={false} />,
+      <Text
+        text={toolStart(1, 'save_file(file=a.py)')}
+        isCreatedByUser={false}
+        showCursor={false}
+      />,
     );
 
     expect(screen.getByTestId('tool-call')).toHaveAttribute('data-progress', '0.1');
 
     rerender(
       <Text
-        text={'<tool>save_file(file=a.py)\nok</tool>'}
+        text={toolDone(1, 'save_file(file=a.py)', 'ok')}
         isCreatedByUser={false}
         showCursor={false}
       />,
@@ -179,11 +200,15 @@ describe('Text tool tag rendering', () => {
     expect(toolCall).toHaveAttribute('data-output', 'ok');
   });
 
-  test('marks pending tool as cancelled when stream is no longer submitting', () => {
+  test('marks start tool as cancelled when stream is no longer submitting', () => {
     mockUseMessageContext.mockReturnValue({ isSubmitting: false, isLatestMessage: true } as any);
 
     render(
-      <Text text="<tool>save_file(file=a.py)</tool>" isCreatedByUser={false} showCursor={false} />,
+      <Text
+        text={toolStart(1, 'save_file(file=a.py)')}
+        isCreatedByUser={false}
+        showCursor={false}
+      />,
     );
 
     expect(screen.getByTestId('tool-call')).toHaveAttribute('data-state', 'cancelled');
@@ -205,9 +230,13 @@ describe('Text tool tag rendering', () => {
   test('renders tools inside tool-group as separate ToolCall cards', () => {
     render(
       <Text
-        text={
-          '<tool-group>\n<tool>save_file(file=a.py)\nok</tool>\n\n<tool>run_shell(cmd=pwd)\n/app</tool>\n</tool-group>'
-        }
+        text={[
+          '<tool-group>',
+          toolDone(1, 'save_file(file=a.py)', 'ok'),
+          '',
+          toolDone(2, 'run_shell(cmd=pwd)', '/app'),
+          '</tool-group>',
+        ].join('\n')}
         isCreatedByUser={false}
         showCursor={false}
       />,
@@ -222,17 +251,29 @@ describe('Text tool tag rendering', () => {
   });
 
   test('renders unclosed tool fragments as plain markdown text', () => {
-    const text = 'Hello <tool>save_file(file=a.py)';
+    const text = 'Hello <tool id="1" state="start">save_file(file=a.py)';
     render(<Text text={text} isCreatedByUser={false} showCursor={false} />);
 
     expect(screen.queryByTestId('tool-call')).not.toBeInTheDocument();
     expect(screen.getByTestId('markdown')).toHaveTextContent(text);
   });
 
+  test('renders old-format tool tags as plain markdown text', () => {
+    const text = '<tool>save_file(file=a.py)\nok</tool>';
+    render(<Text text={text} isCreatedByUser={false} showCursor={false} />);
+
+    expect(screen.queryByTestId('tool-call')).not.toBeInTheDocument();
+    const markdown = screen.getByTestId('markdown');
+    expect(markdown.textContent).toContain('<tool>save_file(file=a.py)');
+    expect(markdown.textContent).toContain('ok</tool>');
+  });
+
   test('decodes HTML entities in tool args and output before rendering ToolCall', () => {
     render(
       <Text
-        text={'<tool>save_file(content=&lt;div&gt;hello&lt;/div&gt;)\n&amp;done</tool>'}
+        text={
+          '<tool id="1" state="done">save_file(content=&lt;div&gt;hello&lt;/div&gt;)\n&amp;done</tool>'
+        }
         isCreatedByUser={false}
         showCursor={false}
       />,
@@ -244,7 +285,9 @@ describe('Text tool tag rendering', () => {
   });
 
   test('derives tool name from call even when no parenthesis is present', () => {
-    render(<Text text={'<tool>save_file\nok</tool>'} isCreatedByUser={false} showCursor={false} />);
+    render(
+      <Text text={toolDone(1, 'save_file', 'ok')} isCreatedByUser={false} showCursor={false} />,
+    );
 
     const toolCall = screen.getByTestId('tool-call');
     expect(toolCall).toHaveAttribute('data-name', 'save_file');
@@ -252,7 +295,7 @@ describe('Text tool tag rendering', () => {
   });
 
   test('falls back to tool name "tool" for empty or invalid call prefix', () => {
-    render(<Text text={'<tool>(weird)\nok</tool>'} isCreatedByUser={false} showCursor={false} />);
+    render(<Text text={toolDone(1, '(weird)', 'ok')} isCreatedByUser={false} showCursor={false} />);
 
     const toolCall = screen.getByTestId('tool-call');
     expect(toolCall).toHaveAttribute('data-name', 'tool');
@@ -261,7 +304,7 @@ describe('Text tool tag rendering', () => {
   test('marks the last tool as isLast even when trailing whitespace text is filtered', () => {
     render(
       <Text
-        text={'<tool>save_file(file=a.py)\nok</tool>\n\n'}
+        text={`${toolDone(1, 'save_file(file=a.py)', 'ok')}\n\n`}
         isCreatedByUser={false}
         showCursor={false}
       />,
@@ -271,21 +314,30 @@ describe('Text tool tag rendering', () => {
   });
 
   test('renders inline-code tool tags as markdown text, not ToolCall cards', () => {
-    const content = 'Use `<tool>save_file(file=a.py)</tool>` as literal documentation.';
+    const content =
+      'Use `<tool id="1" state="done">save_file(file=a.py)\nok</tool>` as literal documentation.';
     render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
 
     expect(screen.queryByTestId('tool-call')).not.toBeInTheDocument();
-    expect(screen.getByTestId('markdown')).toHaveTextContent(content);
+    const markdown = screen.getByTestId('markdown');
+    expect(markdown.textContent).toContain('Use `<tool id="1" state="done">save_file(file=a.py)');
+    expect(markdown.textContent).toContain('ok</tool>` as literal documentation.');
   });
 
   test('renders fenced-code tool tags as markdown text, not ToolCall cards', () => {
-    const content = ['```txt', '<tool>save_file(file=a.py)\nok</tool>', '```'].join('\n');
+    const content = [
+      '```txt',
+      '<tool id="1" state="done">save_file(file=a.py)',
+      'ok</tool>',
+      '```',
+    ].join('\n');
+
     render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
 
     expect(screen.queryByTestId('tool-call')).not.toBeInTheDocument();
     const markdown = screen.getByTestId('markdown');
     expect(markdown.textContent).toContain('```txt');
-    expect(markdown.textContent).toContain('<tool>save_file(file=a.py)');
+    expect(markdown.textContent).toContain('<tool id="1" state="done">save_file(file=a.py)');
     expect(markdown.textContent).toContain('ok</tool>');
     expect(markdown.textContent).toContain('```');
   });
@@ -293,11 +345,11 @@ describe('Text tool tag rendering', () => {
   test('keeps fenced examples as markdown and renders real tool tag outside fence', () => {
     const content = [
       '```txt',
-      '<tool>example_call()',
+      '<tool id="1" state="done">example_call()',
       'example_result</tool>',
       '```',
       '',
-      '<tool>run_shell(cmd=pwd)',
+      '<tool id="2" state="done">run_shell(cmd=pwd)',
       '/app</tool>',
     ].join('\n');
 
@@ -305,7 +357,7 @@ describe('Text tool tag rendering', () => {
 
     const markdown = screen.getByTestId('markdown');
     expect(markdown.textContent).toContain('```txt');
-    expect(markdown.textContent).toContain('<tool>example_call()');
+    expect(markdown.textContent).toContain('<tool id="1" state="done">example_call()');
     expect(markdown.textContent).toContain('example_result</tool>');
     expect(markdown.textContent).toContain('```');
     const toolCall = screen.getByTestId('tool-call');
@@ -313,27 +365,11 @@ describe('Text tool tag rendering', () => {
     expect(toolCall).toHaveAttribute('data-output', '/app');
   });
 
-  test('renders trailing Result line outside tool tag as markdown text', () => {
-    const content =
-      '<tool>list_entities(domain=light)</tool>\nResult: [{"entity_id":"light.kitchen"}]';
-    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
-
-    const toolCall = screen.getByTestId('tool-call');
-    expect(toolCall).toHaveAttribute('data-name', 'list_entities');
-    expect(toolCall).toHaveAttribute('data-args', 'list_entities(domain=light)');
-    expect(toolCall).toHaveAttribute('data-output', '');
-    expect(toolCall).toHaveAttribute('data-progress', '0.1');
-
-    const markdown = screen.getByTestId('markdown');
-    expect(markdown.textContent).toContain('Result: [{"entity_id":"light.kitchen"}]');
-  });
-
-  test('collapses pending+completed duplicate tool blocks into one completed card', () => {
+  test('collapses start+done duplicate tool blocks into one completed card', () => {
     const content = [
-      '<tool>search_knowledge_base(query=tools capabilities)</tool>',
+      toolStart(1, 'search_knowledge_base(query=tools capabilities)'),
       '',
-      '<tool>search_knowledge_base(query=tools capabilities)',
-      '[{"name":"a.md"}]</tool>',
+      toolDone(1, 'search_knowledge_base(query=tools capabilities)', '[{"name":"a.md"}]'),
     ].join('\n');
 
     mockUseMessageContext.mockReturnValue({ isSubmitting: false, isLatestMessage: true } as any);
@@ -347,12 +383,12 @@ describe('Text tool tag rendering', () => {
     expect(toolCalls[0]).toHaveAttribute('data-state', 'active');
   });
 
-  test('collapses batched pending blocks followed by completed blocks', () => {
+  test('collapses batched start blocks followed by done blocks', () => {
     const content = [
-      '<tool>search_knowledge_base(query=one)</tool>',
-      '<tool>search_knowledge_base(query=two)</tool>',
-      '<tool>search_knowledge_base(query=one)\nresult-one</tool>',
-      '<tool>search_knowledge_base(query=two)\nresult-two</tool>',
+      toolStart(1, 'search_knowledge_base(query=one)'),
+      toolStart(2, 'search_knowledge_base(query=two)'),
+      toolDone(1, 'search_knowledge_base(query=one)', 'result-one'),
+      toolDone(2, 'search_knowledge_base(query=two)', 'result-two'),
     ].join('\n\n');
 
     mockUseMessageContext.mockReturnValue({ isSubmitting: false, isLatestMessage: true } as any);

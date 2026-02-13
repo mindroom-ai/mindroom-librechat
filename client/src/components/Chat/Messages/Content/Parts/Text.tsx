@@ -55,11 +55,11 @@ const TextPart = memo(({ text, isCreatedByUser, showCursor }: TextPartProps) => 
 
         return (
           <ToolCall
-            key={`tool-tag-call-${index}`}
+            key={`tool-tag-call-${segment.id}`}
             name={getToolName(segment.call)}
             args={segment.call}
-            output={segment.result ?? undefined}
-            initialProgress={segment.result === null ? 0.1 : 1}
+            output={segment.state === 'done' ? (segment.result ?? '') : undefined}
+            initialProgress={segment.state === 'done' ? 1 : 0.1}
             isSubmitting={isSubmitting}
             isLast={index === filteredSegments.length - 1}
           />

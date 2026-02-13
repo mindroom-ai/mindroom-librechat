@@ -1,8 +1,15 @@
 export type ToolSegment =
   | { type: 'text'; text: string }
-  | { type: 'tool'; call: string; result: string | null; raw: string };
+  | {
+      type: 'tool';
+      id: string;
+      state: 'start' | 'done';
+      call: string;
+      result: string | null;
+      raw: string;
+    };
 
-const TOOL_OPEN_TAG = '<tool>';
+const TOOL_OPEN_TAG_PREFIX = '<tool';
 const TOOL_CLOSE_TAG = '</tool>';
 const TOOL_GROUP_OPEN_TAG = '<tool-group>';
 const TOOL_GROUP_CLOSE_TAG = '</tool-group>';
@@ -189,6 +196,26 @@ const findNextToolTagOutsideCode = (
   start: number,
   end: number,
 ): ToolTagMatch | null => {
+  const isToolTagStart = (index: number) => {
+    if (!text.startsWith(TOOL_OPEN_TAG_PREFIX, index)) {
+      return false;
+    }
+
+    const nextIndex = index + TOOL_OPEN_TAG_PREFIX.length;
+    if (nextIndex >= end) {
+      return false;
+    }
+
+    const nextValue = text[nextIndex];
+    return (
+      nextValue === '>' ||
+      nextValue === ' ' ||
+      nextValue === '\t' ||
+      nextValue === '\n' ||
+      nextValue === '\r'
+    );
+  };
+
   let cursor = start;
 
   while (cursor < end) {
@@ -215,12 +242,12 @@ const findNextToolTagOutsideCode = (
       }
     }
 
-    if (text.startsWith(TOOL_OPEN_TAG, cursor)) {
-      return { index: cursor, type: 'tool' };
-    }
-
     if (text.startsWith(TOOL_GROUP_OPEN_TAG, cursor)) {
       return { index: cursor, type: 'group' };
+    }
+
+    if (isToolTagStart(cursor)) {
+      return { index: cursor, type: 'tool' };
     }
 
     cursor++;
@@ -248,7 +275,13 @@ const parseRange = (text: string, start: number, end: number): ToolSegment[] => 
     }
 
     if (nextType === 'tool') {
-      const bodyStart = nextIndex + TOOL_OPEN_TAG.length;
+      const openTagEnd = text.indexOf('>', nextIndex + TOOL_OPEN_TAG_PREFIX.length);
+      if (openTagEnd === -1 || openTagEnd >= end) {
+        pushTextSegment(segments, text.slice(nextIndex, end));
+        break;
+      }
+
+      const bodyStart = openTagEnd + 1;
       const closeIndex = text.indexOf(TOOL_CLOSE_TAG, bodyStart);
 
       if (closeIndex === -1 || closeIndex > end) {
@@ -256,13 +289,29 @@ const parseRange = (text: string, start: number, end: number): ToolSegment[] => 
         break;
       }
 
+      const openTag = text.slice(nextIndex, openTagEnd + 1);
+      const idMatch = openTag.match(/\bid="([^"]+)"/);
+      const stateMatch = openTag.match(/\bstate="(start|done)"/);
+      const id = idMatch?.[1]?.trim() ?? '';
+      const state = stateMatch?.[1] as 'start' | 'done' | undefined;
+
+      if (!id || state == null) {
+        pushTextSegment(segments, text.slice(nextIndex, closeIndex + TOOL_CLOSE_TAG.length));
+        cursor = closeIndex + TOOL_CLOSE_TAG.length;
+        continue;
+      }
+
       const raw = text.slice(bodyStart, closeIndex);
       const newlineIndex = raw.indexOf('\n');
       const call = decodeHtmlEntities(newlineIndex === -1 ? raw : raw.slice(0, newlineIndex));
-      const result = newlineIndex === -1 ? null : decodeHtmlEntities(raw.slice(newlineIndex + 1));
+      const parsedResult =
+        newlineIndex === -1 ? null : decodeHtmlEntities(raw.slice(newlineIndex + 1));
+      const result = state === 'start' ? null : (parsedResult ?? '');
 
       segments.push({
         type: 'tool',
+        id,
+        state,
         call,
         result,
         raw,
@@ -303,74 +352,42 @@ const collapsePendingCompletedDuplicates = (segments: ToolSegment[]): ToolSegmen
     return segments;
   }
 
-  const collapseWithinSpan = (span: ToolSegment[]): ToolSegment[] => {
-    const futureCompletedByCall = new Map<string, number>();
-    for (const segment of span) {
-      if (segment.type !== 'tool' || segment.result === null) {
-        continue;
-      }
-      const key = segment.call.trim();
-      futureCompletedByCall.set(key, (futureCompletedByCall.get(key) ?? 0) + 1);
-    }
-
-    const filtered: ToolSegment[] = [];
-    for (const segment of span) {
-      if (segment.type !== 'tool') {
-        filtered.push(segment);
-        continue;
-      }
-
-      const key = segment.call.trim();
-
-      if (segment.result !== null) {
-        const remaining = futureCompletedByCall.get(key) ?? 0;
-        if (remaining <= 1) {
-          futureCompletedByCall.delete(key);
-        } else {
-          futureCompletedByCall.set(key, remaining - 1);
-        }
-        filtered.push(segment);
-        continue;
-      }
-
-      if ((futureCompletedByCall.get(key) ?? 0) > 0) {
-        continue;
-      }
-
-      filtered.push(segment);
-    }
-
-    return filtered;
-  };
-
-  const filtered: ToolSegment[] = [];
-  let span: ToolSegment[] = [];
-
-  const flushSpan = () => {
-    if (span.length === 0) {
-      return;
-    }
-    filtered.push(...collapseWithinSpan(span));
-    span = [];
-  };
-
-  for (const segment of segments) {
-    if (segment.type === 'text' && segment.text.trim().length > 0) {
-      flushSpan();
-      filtered.push(segment);
+  const latestIndexById = new Map<string, number>();
+  for (let index = 0; index < segments.length; index++) {
+    const segment = segments[index];
+    if (segment.type !== 'tool') {
       continue;
     }
 
-    span.push(segment);
+    const previousIndex = latestIndexById.get(segment.id);
+    if (previousIndex == null) {
+      latestIndexById.set(segment.id, index);
+      continue;
+    }
+
+    const previousSegment = segments[previousIndex];
+    if (segment.state === 'done') {
+      latestIndexById.set(segment.id, index);
+      continue;
+    }
+
+    if (previousSegment.type === 'tool' && previousSegment.state !== 'done') {
+      latestIndexById.set(segment.id, index);
+    }
   }
-  flushSpan();
 
   const collapsed: ToolSegment[] = [];
-  for (const segment of filtered) {
+  for (let index = 0; index < segments.length; index++) {
+    const segment = segments[index];
     if (segment.type === 'text') {
       pushTextSegment(collapsed, segment.text);
       continue;
     }
+
+    if (latestIndexById.get(segment.id) !== index) {
+      continue;
+    }
+
     collapsed.push(segment);
   }
 
