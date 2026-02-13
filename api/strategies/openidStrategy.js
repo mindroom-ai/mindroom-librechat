@@ -541,57 +541,34 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
     }
   }
 
-  const roleMapping = process.env.OPENID_ROLE_MAPPING;
-  if (roleMapping && user.role !== SystemRoles.ADMIN) {
-    const roleMappingPath =
-      process.env.OPENID_ROLE_MAPPING_PARAMETER_PATH ||
-      process.env.OPENID_ADMIN_ROLE_PARAMETER_PATH;
-    const roleMappingTokenKind =
-      process.env.OPENID_ROLE_MAPPING_TOKEN_KIND || process.env.OPENID_ADMIN_ROLE_TOKEN_KIND;
+  const groupsPath = process.env.OPENID_GROUPS_PARAMETER_PATH;
+  const groupsTokenKind = process.env.OPENID_GROUPS_TOKEN_KIND;
 
-    if (roleMappingPath && roleMappingTokenKind) {
-      let tokenObject;
-      switch (roleMappingTokenKind) {
-        case 'access':
-          tokenObject = jwtDecode(tokenset.access_token);
-          break;
-        case 'id':
-          tokenObject = jwtDecode(tokenset.id_token);
-          break;
-        case 'userinfo':
-          tokenObject = userinfo;
-          break;
-        default:
-          logger.error(
-            `[openidStrategy] Invalid role mapping token kind: ${roleMappingTokenKind}`,
-          );
-      }
+  if (groupsPath && groupsTokenKind) {
+    let tokenObject;
+    switch (groupsTokenKind) {
+      case 'access':
+        tokenObject = jwtDecode(tokenset.access_token);
+        break;
+      case 'id':
+        tokenObject = jwtDecode(tokenset.id_token);
+        break;
+      case 'userinfo':
+        tokenObject = userinfo;
+        break;
+      default:
+        logger.error(
+          `[openidStrategy] Invalid groups token kind: ${groupsTokenKind}. Must be one of 'access', 'id', or 'userinfo'.`,
+        );
+    }
 
-      if (tokenObject) {
-        const userGroups = get(tokenObject, roleMappingPath);
-        const groupList = Array.isArray(userGroups) ? userGroups : userGroups ? [userGroups] : [];
-        const mappings = roleMapping
-          .split(',')
-          .map((entry) => entry.trim())
-          .filter(Boolean)
-          .map((entry) => {
-            const sepIndex = entry.indexOf(':');
-            return sepIndex > 0
-              ? { group: entry.slice(0, sepIndex), role: entry.slice(sepIndex + 1) }
-              : null;
-          })
-          .filter(Boolean);
-
-        for (const { group, role } of mappings) {
-          if (groupList.includes(group)) {
-            user.role = role;
-            logger.info(
-              `[openidStrategy] User ${username} assigned role "${role}" from group "${group}"`,
-            );
-            break;
-          }
-        }
-      }
+    if (tokenObject) {
+      const rawGroups = get(tokenObject, groupsPath);
+      const groupList = Array.isArray(rawGroups) ? rawGroups : rawGroups ? [rawGroups] : [];
+      user.openidGroups = groupList;
+      logger.info(
+        `[openidStrategy] User ${username} has groups: ${groupList.join(', ') || '(none)'}`,
+      );
     }
   }
 

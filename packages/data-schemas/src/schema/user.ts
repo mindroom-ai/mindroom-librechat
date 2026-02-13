@@ -81,6 +81,10 @@ const userSchema = new Schema<IUser>(
       unique: true,
       sparse: true,
     },
+    openidGroups: {
+      type: [String],
+      default: undefined,
+    },
     samlId: {
       type: String,
       unique: true,

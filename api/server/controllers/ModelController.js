@@ -28,11 +28,16 @@ function filterModelsByRole(allModels, restrictions) {
 }
 
 /**
- * Build a per-role cache key for the models config.
+ * Build a cache key for the models config based on role and/or groups.
  * @param {string} [role]
+ * @param {string[]} [openidGroups]
  * @returns {string}
  */
-function getModelsCacheKey(role) {
+function getModelsCacheKey(role, openidGroups) {
+  if (openidGroups && openidGroups.length > 0) {
+    const sorted = [...openidGroups].sort().join(',');
+    return `${CacheKeys.MODELS_CONFIG}:g:${sorted}`;
+  }
   return role ? `${CacheKeys.MODELS_CONFIG}:${role}` : CacheKeys.MODELS_CONFIG;
 }
 
@@ -72,8 +77,9 @@ async function loadBaseModels(req, options = {}) {
 const getModelsConfig = async (req, options = {}) => {
   const { refresh = false } = options;
   const role = req?.user?.role;
+  const openidGroups = req?.user?.openidGroups;
   const cache = getLogStores(CacheKeys.CONFIG_STORE);
-  const cacheKey = getModelsCacheKey(role);
+  const cacheKey = getModelsCacheKey(role, openidGroups);
 
   if (!refresh) {
     const cached = await cache.get(cacheKey);
@@ -83,10 +89,10 @@ const getModelsConfig = async (req, options = {}) => {
   }
 
   const baseModels = await loadBaseModels(req, { refresh });
-  const appConfig = await getAppConfig({ role });
+  const appConfig = await getAppConfig({ role, openidGroups });
   const filtered = filterModelsByRole(baseModels, appConfig._roleModelRestrictions);
 
-  if (role) {
+  if (role || (openidGroups && openidGroups.length > 0)) {
     await cache.set(cacheKey, filtered);
   }
 

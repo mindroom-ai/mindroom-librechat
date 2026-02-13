@@ -175,6 +175,80 @@ describe('Role-based model permissions (integration)', () => {
     });
   });
 
+  // ─── Schema validation for groups ──────────────────────────────────
+
+  describe('configSchema validates groups section', () => {
+    const baseConfig = {
+      version: '1.2.1',
+      interface: { customWelcome: 'hi' },
+      endpoints: {
+        openAI: { titleModel: 'gpt-4o-mini' },
+      },
+    };
+
+    it('accepts a valid groups config', () => {
+      const config = {
+        ...baseConfig,
+        groups: {
+          'openai-users': {
+            endpoints: {
+              openAI: { models: ['gpt-4o-mini'] },
+            },
+          },
+        },
+      };
+
+      const result = configSchema.strict().safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts groups with custom endpoints', () => {
+      const config = {
+        ...baseConfig,
+        groups: {
+          'mindroom-users': {
+            endpoints: {
+              custom: {
+                MindRoom: { models: ['mindroom-basic'] },
+              },
+            },
+          },
+        },
+      };
+
+      const result = configSchema.strict().safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts both roles and groups together', () => {
+      const config = {
+        ...baseConfig,
+        roles: {
+          USER: {
+            endpoints: {
+              openAI: { models: ['gpt-4o-mini'] },
+            },
+          },
+        },
+        groups: {
+          'premium-group': {
+            endpoints: {
+              openAI: { models: ['gpt-4o', 'gpt-4o-mini'] },
+            },
+          },
+        },
+      };
+
+      const result = configSchema.strict().safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts config with no groups section', () => {
+      const result = configSchema.strict().safeParse(baseConfig);
+      expect(result.success).toBe(true);
+    });
+  });
+
   // ─── Full chain: config → getAppConfig → filterModelsByRole ────────
 
   describe('end-to-end filtering', () => {
@@ -345,6 +419,170 @@ describe('Role-based model permissions (integration)', () => {
 
       // Only gpt-4o-mini exists in both lists
       expect(filtered.openAI).toEqual(['gpt-4o-mini']);
+    });
+  });
+
+  // ─── Group-based filtering ────────────────────────────────────────
+
+  describe('group-based end-to-end filtering', () => {
+    it('unions models from multiple groups', async () => {
+      loadCustomConfig.mockResolvedValue({
+        version: '1.2.1',
+        interface: { customWelcome: 'hi' },
+        groups: {
+          'openai-users': {
+            endpoints: {
+              openAI: { models: ['gpt-4o-mini'] },
+            },
+          },
+          'mindroom-users': {
+            endpoints: {
+              custom: {
+                MindRoom: { models: ['mindroom-basic'] },
+              },
+            },
+          },
+        },
+        endpoints: {
+          openAI: { titleModel: 'gpt-4o-mini' },
+        },
+      });
+
+      const appConfig = await getAppConfig({
+        openidGroups: ['openai-users', 'mindroom-users'],
+      });
+
+      expect(appConfig._roleModelRestrictions).toBeDefined();
+      expect(appConfig._roleModelRestrictions.openAI).toEqual({ models: ['gpt-4o-mini'] });
+      expect(appConfig._roleModelRestrictions.MindRoom).toEqual({ models: ['mindroom-basic'] });
+
+      const allModels = {
+        openAI: ['gpt-4o', 'gpt-4o-mini', 'o1'],
+        MindRoom: ['mindroom-pro', 'mindroom-basic', 'mindroom-enterprise'],
+        google: ['gemini-pro'],
+      };
+      const filtered = filterModelsByRole(allModels, appConfig._roleModelRestrictions);
+
+      expect(filtered.openAI).toEqual(['gpt-4o-mini']);
+      expect(filtered.MindRoom).toEqual(['mindroom-basic']);
+      expect(filtered.google).toEqual(['gemini-pro']); // unrestricted
+    });
+
+    it('unions overlapping models from same endpoint across groups', async () => {
+      loadCustomConfig.mockResolvedValue({
+        version: '1.2.1',
+        interface: { customWelcome: 'hi' },
+        groups: {
+          'basic-openai': {
+            endpoints: {
+              openAI: { models: ['gpt-4o-mini'] },
+            },
+          },
+          'premium-openai': {
+            endpoints: {
+              openAI: { models: ['gpt-4o', 'o1'] },
+            },
+          },
+        },
+        endpoints: {
+          openAI: { titleModel: 'gpt-4o-mini' },
+        },
+      });
+
+      const appConfig = await getAppConfig({
+        openidGroups: ['basic-openai', 'premium-openai'],
+      });
+
+      expect(appConfig._roleModelRestrictions.openAI.models).toEqual(
+        expect.arrayContaining(['gpt-4o-mini', 'gpt-4o', 'o1']),
+      );
+      expect(appConfig._roleModelRestrictions.openAI.models).toHaveLength(3);
+    });
+
+    it('groups take precedence over roles when both configured', async () => {
+      loadCustomConfig.mockResolvedValue({
+        version: '1.2.1',
+        interface: { customWelcome: 'hi' },
+        roles: {
+          USER: {
+            endpoints: {
+              openAI: { models: ['gpt-4o-mini'] },
+            },
+          },
+        },
+        groups: {
+          'premium-group': {
+            endpoints: {
+              openAI: { models: ['gpt-4o', 'gpt-4o-mini', 'o1'] },
+            },
+          },
+        },
+        endpoints: {
+          openAI: { titleModel: 'gpt-4o-mini' },
+        },
+      });
+
+      const appConfig = await getAppConfig({
+        role: 'USER',
+        openidGroups: ['premium-group'],
+      });
+
+      // Group config should take precedence
+      expect(appConfig._roleModelRestrictions.openAI.models).toEqual(
+        expect.arrayContaining(['gpt-4o', 'gpt-4o-mini', 'o1']),
+      );
+    });
+
+    it('falls back to role-based when user has no matching groups', async () => {
+      loadCustomConfig.mockResolvedValue({
+        version: '1.2.1',
+        interface: { customWelcome: 'hi' },
+        roles: {
+          USER: {
+            endpoints: {
+              openAI: { models: ['gpt-4o-mini'] },
+            },
+          },
+        },
+        groups: {
+          'premium-group': {
+            endpoints: {
+              openAI: { models: ['gpt-4o', 'gpt-4o-mini', 'o1'] },
+            },
+          },
+        },
+        endpoints: {
+          openAI: { titleModel: 'gpt-4o-mini' },
+        },
+      });
+
+      const appConfig = await getAppConfig({
+        role: 'USER',
+        openidGroups: ['unrelated-group'],
+      });
+
+      // Falls back to role-based
+      expect(appConfig._roleModelRestrictions.openAI).toEqual({ models: ['gpt-4o-mini'] });
+    });
+
+    it('no restrictions when user has no groups and no role config', async () => {
+      loadCustomConfig.mockResolvedValue({
+        version: '1.2.1',
+        interface: { customWelcome: 'hi' },
+        groups: {
+          'some-group': {
+            endpoints: {
+              openAI: { models: ['gpt-4o-mini'] },
+            },
+          },
+        },
+        endpoints: {
+          openAI: { titleModel: 'gpt-4o-mini' },
+        },
+      });
+
+      const appConfig = await getAppConfig({ openidGroups: [] });
+      expect(appConfig._roleModelRestrictions).toBeUndefined();
     });
   });
 });

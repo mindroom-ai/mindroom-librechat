@@ -42,6 +42,7 @@ export const AppService = async (params?: {
   const webSearch = loadWebSearchConfig(config.webSearch);
   const memory = loadMemoryConfig(config.memory);
   const roles = config.roles;
+  const groups = config.groups;
   const filteredTools = config.filteredTools;
   const includedTools = config.includedTools;
   const fileStrategy = (config.fileStrategy ?? configDefaults.fileStrategy) as
@@ -74,6 +75,7 @@ export const AppService = async (params?: {
     paths,
     config,
     roles,
+    groups,
     memory,
     speech,
     balance,

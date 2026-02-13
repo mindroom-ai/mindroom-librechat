@@ -1,60 +1,110 @@
-# Feature: OIDC Role Mapping
+# Feature: OIDC Group-Based Model Permissions
 
 ## Provenance
 
-- Fork PR: (this PR)
+- Fork PR: #19
 - Upstream PR: none (fork-only feature)
+- Depends on: role-based model permissions (PR #13)
 
 ## Why
 
-The role-based model permissions feature supports arbitrary role names in `librechat.yaml`, but the OIDC strategy only assigned `USER` or `ADMIN`. There was no way to map IdP groups to custom roles like `premium` or `basic` without editing MongoDB directly.
+The role-based model permissions feature (PR #13) restricts models per role, but roles are mutually exclusive — a user can only have one role. When users belong to multiple IdP groups that each grant access to different endpoints/models, a single-role mapping can't represent the union of all their permissions. This feature maps IdP groups directly to model permissions and takes the union, so users in multiple groups get combined access.
 
 ## What was implemented
 
-Added `OPENID_ROLE_MAPPING` env var support to the OIDC strategy. It maps IdP group claims to LibreChat role names.
+1. **Group extraction from OIDC tokens**: The OIDC strategy reads the user's group memberships from their token and stores them on the User document (`openidGroups` field).
+
+2. **`groups` config section in `librechat.yaml`**: Each group maps to per-endpoint model allowlists, using the same shape as `roles`.
+
+3. **Union-based permission resolution**: When a user has multiple matching groups, the allowed models are the union across all groups. Groups take precedence over role-based config when both are configured.
 
 ## Configuration
 
-```bash
-# Comma-separated group:role pairs, checked in order (first match wins)
-OPENID_ROLE_MAPPING=idp-premium-group:premium,idp-basic-group:basic
+### Environment variables
 
-# Where to find groups in the token (optional — falls back to OPENID_ADMIN_ROLE_* values)
-OPENID_ROLE_MAPPING_PARAMETER_PATH=groups
-OPENID_ROLE_MAPPING_TOKEN_KIND=id
+```bash
+# Where to find groups in the OIDC token
+OPENID_GROUPS_PARAMETER_PATH=groups          # dot-path to the groups claim
+OPENID_GROUPS_TOKEN_KIND=id                   # 'id', 'access', or 'userinfo'
 ```
 
-Combined with `librechat.yaml`:
+### librechat.yaml
 
 ```yaml
-roles:
-  basic:
+groups:
+  openai-users:
     endpoints:
       openAI:
         models: [gpt-4o-mini]
-  premium:
+  mindroom-users:
+    endpoints:
+      custom:
+        MindRoom:
+          models: [mindroom-basic, mindroom-pro]
+  premium-openai:
     endpoints:
       openAI:
-        models: [gpt-4o, gpt-4o-mini, o1]
-  ADMIN:
-    # No entry = no restrictions
+        models: [gpt-4o, gpt-4o-mini, o1, o3-mini]
 ```
 
-### Rules
+A user in both `openai-users` and `mindroom-users` gets `gpt-4o-mini` on OpenAI **and** `mindroom-basic`/`mindroom-pro` on MindRoom.
 
-- **First match wins**: Mappings are checked in order. The first group found in the user's token determines their role.
-- **ADMIN takes priority**: If the user is assigned ADMIN via `OPENID_ADMIN_ROLE`, role mapping is skipped entirely.
-- **No match = no change**: If none of the mapped groups are in the user's token, the role is not modified (stays at default `USER`).
-- **Falls back to admin path config**: If `OPENID_ROLE_MAPPING_PARAMETER_PATH` / `OPENID_ROLE_MAPPING_TOKEN_KIND` are not set, the values from `OPENID_ADMIN_ROLE_PARAMETER_PATH` / `OPENID_ADMIN_ROLE_TOKEN_KIND` are used.
-- **Single string or array**: The group claim can be a single string or an array of strings.
+A user in both `openai-users` and `premium-openai` gets the union: `gpt-4o-mini`, `gpt-4o`, `o1`, `o3-mini` on OpenAI.
+
+### Precedence rules
+
+1. **Groups over roles**: If the user has matching groups in the `groups` config, those are used. Role-based config (`roles` section) is only used as a fallback.
+2. **No matching groups → fall back to role**: If the user has groups but none match the config, the `roles` section is checked.
+3. **No config → no restrictions**: If neither `groups` nor `roles` is configured, all models are visible.
+
+## How it works
+
+```
+OIDC token (groups claim)
+    ↓
+openidStrategy.js extracts groups, stores on user.openidGroups
+    ↓
+ModelController reads req.user.openidGroups
+    ↓
+getAppConfig({ openidGroups }) → applyGroupBasedConfig()
+    ↓
+Union of all matching groups' endpoint restrictions
+    ↓
+filterModelsByRole() filters available models
+    ↓
+Client receives only allowed models
+```
+
+### Data flow detail
+
+1. **Login**: `openidStrategy.js` reads the groups claim from the OIDC token (path configured via `OPENID_GROUPS_PARAMETER_PATH`), stores the array on `user.openidGroups` in MongoDB.
+
+2. **Model request**: `ModelController.getModelsConfig()` reads `req.user.openidGroups` and passes them to `getAppConfig()`.
+
+3. **Group resolution**: `applyGroupBasedConfig()` iterates the user's groups, looks each up in `baseConfig.groups`, and builds a union of all matching endpoint restrictions using `flattenEndpointRestrictions()`.
+
+4. **Filtering**: `filterModelsByRole()` intersects the union restrictions with the available models per endpoint.
+
+5. **Caching**: Group-based results are cached per sorted group combination in `ModelController` (key: `MODELS_CONFIG:g:group1,group2`). They are not cached in `getAppConfig` since group combinations are per-user.
 
 ## Key files
 
 | File | What it does |
 |------|-------------|
-| `api/strategies/openidStrategy.js` | Role mapping logic (after admin role check) |
-| `api/strategies/openidStrategy.spec.js` | 7 tests for role mapping |
+| `api/strategies/openidStrategy.js` | Extracts groups from OIDC token, stores on user |
+| `api/server/services/Config/app.js` | `applyGroupBasedConfig()` — union logic |
+| `api/server/controllers/ModelController.js` | Per-group cache key, passes groups to `getAppConfig` |
+| `packages/data-provider/src/config.ts` | `groupsConfigSchema` — YAML schema validation |
+| `packages/data-schemas/src/app/service.ts` | Passes `groups` through AppService |
+| `packages/data-schemas/src/schema/user.ts` | `openidGroups` field on User document |
+
+## Tests
+
+| File | Count | What it covers |
+|------|-------|---------------|
+| `api/strategies/openidStrategy.spec.js` | 6 tests | Group extraction from tokens (id/access/userinfo, nested paths, single string) |
+| `api/server/services/Config/__tests__/roleModelPermissions.integration.spec.js` | 9 tests | Schema validation (4) + end-to-end group filtering (5) |
 
 ## User-visible result
 
-Users are automatically assigned the correct role on login based on their IdP group membership. The model selector shows only the models allowed for that role.
+Users are automatically assigned model access based on their IdP group membership. The model selector shows only the union of models allowed across all their groups. No admin intervention required after initial YAML config.

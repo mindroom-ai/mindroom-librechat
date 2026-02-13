@@ -24,11 +24,12 @@ const loadBaseConfig = async () => {
  * Get the app configuration based on user context
  * @param {Object} [options]
  * @param {string} [options.role] - User role for role-based config
+ * @param {string[]} [options.openidGroups] - User's IdP groups for group-based config
  * @param {boolean} [options.refresh] - Force refresh the cache
  * @returns {Promise<AppConfig>}
  */
 async function getAppConfig(options = {}) {
-  const { role, refresh } = options;
+  const { role, openidGroups, refresh } = options;
 
   const cache = getLogStores(CacheKeys.APP_CONFIG);
   const cacheKey = role ? role : BASE_CONFIG_KEY;
@@ -54,6 +55,15 @@ async function getAppConfig(options = {}) {
     }
 
     await cache.set(BASE_CONFIG_KEY, baseConfig);
+  }
+
+  // Group-based config takes precedence over role-based config
+  if (openidGroups && openidGroups.length > 0) {
+    const groupConfig = applyGroupBasedConfig(baseConfig, openidGroups);
+    if (groupConfig !== baseConfig) {
+      // Don't cache per-group-combination in getAppConfig — let ModelController handle caching
+      return groupConfig;
+    }
   }
 
   if (role) {
@@ -85,8 +95,18 @@ function applyRoleBasedConfig(baseConfig, role) {
     return baseConfig;
   }
 
+  const restrictions = flattenEndpointRestrictions(roleEntry.endpoints);
+  return { ...baseConfig, _roleModelRestrictions: restrictions };
+}
+
+/**
+ * Flatten a role/group endpoint config entry into a restrictions map.
+ * @param {Object} endpointsEntry
+ * @returns {Record<string, { models: string[] }>}
+ */
+function flattenEndpointRestrictions(endpointsEntry) {
   const restrictions = {};
-  for (const [key, value] of Object.entries(roleEntry.endpoints)) {
+  for (const [key, value] of Object.entries(endpointsEntry)) {
     if (key === 'custom' && typeof value === 'object') {
       for (const [customName, customValue] of Object.entries(value)) {
         const normalized = normalizeEndpointName(customName);
@@ -96,8 +116,49 @@ function applyRoleBasedConfig(baseConfig, role) {
       restrictions[key] = value;
     }
   }
+  return restrictions;
+}
 
-  return { ...baseConfig, _roleModelRestrictions: restrictions };
+/**
+ * Apply group-based restrictions by taking the union of all matching groups' permissions.
+ * @param {AppConfig} baseConfig
+ * @param {string[]} userGroups
+ * @returns {AppConfig}
+ */
+function applyGroupBasedConfig(baseConfig, userGroups) {
+  const groupsConfig = baseConfig.groups;
+  if (!groupsConfig) {
+    return baseConfig;
+  }
+
+  const unionRestrictions = {};
+  let hasRestrictions = false;
+
+  for (const group of userGroups) {
+    const groupEntry = groupsConfig[group];
+    if (!groupEntry || !groupEntry.endpoints) {
+      continue;
+    }
+    hasRestrictions = true;
+    const groupRestrictions = flattenEndpointRestrictions(groupEntry.endpoints);
+    for (const [endpoint, restriction] of Object.entries(groupRestrictions)) {
+      if (!unionRestrictions[endpoint]) {
+        unionRestrictions[endpoint] = { models: [...restriction.models] };
+      } else {
+        const existing = new Set(unionRestrictions[endpoint].models);
+        for (const model of restriction.models) {
+          existing.add(model);
+        }
+        unionRestrictions[endpoint].models = [...existing];
+      }
+    }
+  }
+
+  if (!hasRestrictions) {
+    return baseConfig;
+  }
+
+  return { ...baseConfig, _roleModelRestrictions: unionRestrictions };
 }
 
 /**
