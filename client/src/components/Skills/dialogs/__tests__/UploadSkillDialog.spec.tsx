@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { FileConfigInput } from 'librechat-data-provider';
 import UploadSkillDialog from '../UploadSkillDialog';
@@ -71,7 +71,8 @@ jest.mock('~/utils', () => ({
 }));
 
 function getFileInput(): HTMLInputElement {
-  const input = document.body.querySelector('input[type="file"]');
+  const inputs = document.body.querySelectorAll('input[type="file"][accept=".zip,.skill,.md"]');
+  const input = inputs.item(inputs.length - 1);
   if (!(input instanceof HTMLInputElement)) {
     throw new Error('Upload input was not rendered');
   }
@@ -80,6 +81,7 @@ function getFileInput(): HTMLInputElement {
 
 describe('UploadSkillDialog', () => {
   beforeEach(() => {
+    cleanup();
     jest.clearAllMocks();
     mockFileConfigInput = {
       skills: {
