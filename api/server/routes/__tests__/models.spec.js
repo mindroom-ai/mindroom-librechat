@@ -290,7 +290,7 @@ describe('GET /api/models — end-to-end filtering', () => {
     const res = await request(app).get('/api/models');
 
     expect(res.status).toBe(200);
-    expect(res.body.openAI).toEqual([]);
+    expect(res.body.openAI).toBeUndefined();
     // Other endpoints unaffected
     expect(res.body.google).toEqual(['gemini-pro', 'gemini-ultra']);
   });

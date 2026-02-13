@@ -138,11 +138,11 @@ describe('filterModelsByRole', () => {
     expect(result.google).toEqual(['gemini-pro', 'gemini-ultra']);
   });
 
-  test('returns empty array when models list is empty', () => {
+  test('omits endpoint entirely when models list is empty', () => {
     const allModels = { openAI: ['gpt-4o', 'gpt-4o-mini'] };
     const restrictions = { openAI: { models: [] } };
     const result = filterModelsByRole(allModels, restrictions);
-    expect(result.openAI).toEqual([]);
+    expect(result.openAI).toBeUndefined();
   });
 
   test('excludes models not in the available list', () => {

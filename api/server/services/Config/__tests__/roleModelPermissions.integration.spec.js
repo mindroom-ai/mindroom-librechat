@@ -342,7 +342,7 @@ describe('Role-based model permissions (integration)', () => {
       const allModels = { openAI: ['gpt-4o', 'gpt-4o-mini'] };
       const filtered = filterModelsByRole(allModels, appConfig._roleModelRestrictions);
 
-      expect(filtered.openAI).toEqual([]);
+      expect(filtered.openAI).toBeUndefined();
     });
 
     it('no roles config means no restrictions for any role', async () => {
