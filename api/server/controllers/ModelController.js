@@ -1,5 +1,5 @@
 const { logger } = require('@librechat/data-schemas');
-const { CacheKeys } = require('librechat-data-provider');
+const { CacheKeys, Time } = require('librechat-data-provider');
 const { loadDefaultModels, loadConfigModels, getAppConfig } = require('~/server/services/Config');
 const { getLogStores } = require('~/cache');
 
@@ -28,11 +28,20 @@ function filterModelsByRole(allModels, restrictions) {
 }
 
 /**
- * Build a per-role cache key for the models config.
+ * Build a cache key for the models config based on role and/or groups.
  * @param {string} [role]
+ * @param {string[]} [openidGroups]
  * @returns {string}
  */
-function getModelsCacheKey(role) {
+function getModelsCacheKey(role, openidGroups) {
+  if (openidGroups && openidGroups.length > 0) {
+    // JSON.stringify handles group names that contain commas or special chars
+    const groupsPart = JSON.stringify([...openidGroups].sort());
+    // Include role because getAppConfig may fall back to role-based restrictions
+    // when none of the user's groups match the config
+    const rolePart = role || '_';
+    return `${CacheKeys.MODELS_CONFIG}:g:${rolePart}:${groupsPart}`;
+  }
   return role ? `${CacheKeys.MODELS_CONFIG}:${role}` : CacheKeys.MODELS_CONFIG;
 }
 
@@ -72,8 +81,9 @@ async function loadBaseModels(req, options = {}) {
 const getModelsConfig = async (req, options = {}) => {
   const { refresh = false } = options;
   const role = req?.user?.role;
+  const openidGroups = req?.user?.openidGroups;
   const cache = getLogStores(CacheKeys.CONFIG_STORE);
-  const cacheKey = getModelsCacheKey(role);
+  const cacheKey = getModelsCacheKey(role, openidGroups);
 
   if (!refresh) {
     const cached = await cache.get(cacheKey);
@@ -83,10 +93,13 @@ const getModelsConfig = async (req, options = {}) => {
   }
 
   const baseModels = await loadBaseModels(req, { refresh });
-  const appConfig = await getAppConfig({ role });
+  const appConfig = await getAppConfig({ role, openidGroups });
   const filtered = filterModelsByRole(baseModels, appConfig._roleModelRestrictions);
 
-  if (role) {
+  if (openidGroups && openidGroups.length > 0) {
+    // TTL for group-based entries — group combinations are per-user so entries can accumulate
+    await cache.set(cacheKey, filtered, Time.TEN_MINUTES);
+  } else if (role) {
     await cache.set(cacheKey, filtered);
   }
 

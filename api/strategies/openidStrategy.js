@@ -541,6 +541,40 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
     }
   }
 
+  const groupsPath = process.env.OPENID_GROUPS_PARAMETER_PATH;
+  const groupsTokenKind = process.env.OPENID_GROUPS_TOKEN_KIND;
+
+  if (groupsPath && groupsTokenKind) {
+    let tokenObject;
+    switch (groupsTokenKind) {
+      case 'access':
+        tokenObject = jwtDecode(tokenset.access_token);
+        break;
+      case 'id':
+        tokenObject = jwtDecode(tokenset.id_token);
+        break;
+      case 'userinfo':
+        tokenObject = userinfo;
+        break;
+      default:
+        logger.error(
+          `[openidStrategy] Invalid groups token kind: ${groupsTokenKind}. Must be one of 'access', 'id', or 'userinfo'.`,
+        );
+    }
+
+    if (tokenObject) {
+      const rawGroups = get(tokenObject, groupsPath);
+      const groupList = Array.isArray(rawGroups) ? rawGroups : rawGroups ? [rawGroups] : [];
+      user.openidGroups = groupList;
+      logger.info(
+        `[openidStrategy] User ${username} has groups: ${groupList.join(', ') || '(none)'}`,
+      );
+    }
+  } else if (user.openidGroups && user.openidGroups.length > 0) {
+    // Clear stale groups when group extraction is not configured
+    user.openidGroups = undefined;
+  }
+
   if (!!userinfo && userinfo.picture && !user.avatar?.includes('manual=true')) {
     /** @type {string | undefined} */
     const imageUrl = userinfo.picture;

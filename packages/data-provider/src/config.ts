@@ -975,6 +975,9 @@ const roleConfigSchema = z.object({
 export const rolesConfigSchema = z.record(z.string(), roleConfigSchema).optional();
 export type TRolesConfig = z.infer<typeof rolesConfigSchema>;
 
+export const groupsConfigSchema = z.record(z.string(), roleConfigSchema).optional();
+export type TGroupsConfig = z.infer<typeof groupsConfigSchema>;
+
 export const configSchema = z.object({
   version: z.string(),
   cache: z.boolean().default(true),
@@ -1019,6 +1022,7 @@ export const configSchema = z.object({
   fileConfig: fileConfigSchema.optional(),
   modelSpecs: specsConfigSchema.optional(),
   roles: rolesConfigSchema,
+  groups: groupsConfigSchema,
   endpoints: z
     .object({
       all: baseEndpointSchema.optional(),

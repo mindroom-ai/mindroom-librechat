@@ -152,6 +152,8 @@ describe('setupOpenId', () => {
     process.env.OPENID_ADMIN_ROLE_TOKEN_KIND = 'id';
     delete process.env.OPENID_USERNAME_CLAIM;
     delete process.env.OPENID_NAME_CLAIM;
+    delete process.env.OPENID_GROUPS_PARAMETER_PATH;
+    delete process.env.OPENID_GROUPS_TOKEN_KIND;
     delete process.env.PROXY;
     delete process.env.OPENID_USE_PKCE;
 
@@ -1280,6 +1282,99 @@ describe('setupOpenId', () => {
         expect.stringContaining("Key 'roleCount' not found in id token!"),
       );
       expect(user).toBe(false);
+    });
+  });
+
+  describe('OPENID_GROUPS (group extraction)', () => {
+    beforeEach(async () => {
+      jwtDecode.mockReturnValue({
+        roles: ['requiredRole'],
+        groups: ['team-basic', 'all-users'],
+      });
+    });
+
+    it('should store groups from id token on user', async () => {
+      process.env.OPENID_GROUPS_PARAMETER_PATH = 'groups';
+      process.env.OPENID_GROUPS_TOKEN_KIND = 'id';
+
+      await setupOpenId();
+      verifyCallback = require('openid-client/passport').__getVerifyCallbackByName('openid');
+
+      const { user } = await validate(tokenset);
+      expect(user.openidGroups).toEqual(['team-basic', 'all-users']);
+    });
+
+    it('should store groups from access token', async () => {
+      process.env.OPENID_GROUPS_PARAMETER_PATH = 'groups';
+      process.env.OPENID_GROUPS_TOKEN_KIND = 'access';
+
+      jwtDecode.mockImplementation((token) => {
+        if (token === 'fake_access_token') {
+          return { roles: ['requiredRole'], groups: ['access-group'] };
+        }
+        return { roles: ['requiredRole'] };
+      });
+
+      await setupOpenId();
+      verifyCallback = require('openid-client/passport').__getVerifyCallbackByName('openid');
+
+      const { user } = await validate(tokenset);
+      expect(user.openidGroups).toEqual(['access-group']);
+    });
+
+    it('should handle single string group value', async () => {
+      jwtDecode.mockReturnValue({
+        roles: ['requiredRole'],
+        group: 'solo-group',
+      });
+
+      process.env.OPENID_GROUPS_PARAMETER_PATH = 'group';
+      process.env.OPENID_GROUPS_TOKEN_KIND = 'id';
+
+      await setupOpenId();
+      verifyCallback = require('openid-client/passport').__getVerifyCallbackByName('openid');
+
+      const { user } = await validate(tokenset);
+      expect(user.openidGroups).toEqual(['solo-group']);
+    });
+
+    it('should not set openidGroups when env vars are not configured', async () => {
+      await setupOpenId();
+      verifyCallback = require('openid-client/passport').__getVerifyCallbackByName('openid');
+
+      const { user } = await validate(tokenset);
+      expect(user.openidGroups).toBeUndefined();
+    });
+
+    it('should set empty array when groups claim is missing from token', async () => {
+      jwtDecode.mockReturnValue({
+        roles: ['requiredRole'],
+      });
+
+      process.env.OPENID_GROUPS_PARAMETER_PATH = 'groups';
+      process.env.OPENID_GROUPS_TOKEN_KIND = 'id';
+
+      await setupOpenId();
+      verifyCallback = require('openid-client/passport').__getVerifyCallbackByName('openid');
+
+      const { user } = await validate(tokenset);
+      expect(user.openidGroups).toEqual([]);
+    });
+
+    it('should extract groups from nested path', async () => {
+      jwtDecode.mockReturnValue({
+        roles: ['requiredRole'],
+        realm_access: { groups: ['nested-group-a', 'nested-group-b'] },
+      });
+
+      process.env.OPENID_GROUPS_PARAMETER_PATH = 'realm_access.groups';
+      process.env.OPENID_GROUPS_TOKEN_KIND = 'id';
+
+      await setupOpenId();
+      verifyCallback = require('openid-client/passport').__getVerifyCallbackByName('openid');
+
+      const { user } = await validate(tokenset);
+      expect(user.openidGroups).toEqual(['nested-group-a', 'nested-group-b']);
     });
   });
 });
