@@ -303,36 +303,75 @@ const collapsePendingCompletedDuplicates = (segments: ToolSegment[]): ToolSegmen
     return segments;
   }
 
-  const collapsed: ToolSegment[] = [];
-  let index = 0;
-
-  while (index < segments.length) {
-    const current = segments[index];
-    if (current.type !== 'tool' || current.result !== null) {
-      collapsed.push(current);
-      index += 1;
-      continue;
-    }
-
-    let cursor = index + 1;
-    while (cursor < segments.length) {
-      const candidate = segments[cursor];
-      if (candidate.type === 'text' && candidate.text.trim().length === 0) {
-        cursor += 1;
+  const collapseWithinSpan = (span: ToolSegment[]): ToolSegment[] => {
+    const futureCompletedByCall = new Map<string, number>();
+    for (const segment of span) {
+      if (segment.type !== 'tool' || segment.result === null) {
         continue;
       }
-      break;
+      const key = segment.call.trim();
+      futureCompletedByCall.set(key, (futureCompletedByCall.get(key) ?? 0) + 1);
     }
 
-    const next = segments[cursor];
-    if (next?.type === 'tool' && next.result !== null && next.call.trim() === current.call.trim()) {
-      collapsed.push(next);
-      index = cursor + 1;
+    const filtered: ToolSegment[] = [];
+    for (const segment of span) {
+      if (segment.type !== 'tool') {
+        filtered.push(segment);
+        continue;
+      }
+
+      const key = segment.call.trim();
+
+      if (segment.result !== null) {
+        const remaining = futureCompletedByCall.get(key) ?? 0;
+        if (remaining <= 1) {
+          futureCompletedByCall.delete(key);
+        } else {
+          futureCompletedByCall.set(key, remaining - 1);
+        }
+        filtered.push(segment);
+        continue;
+      }
+
+      if ((futureCompletedByCall.get(key) ?? 0) > 0) {
+        continue;
+      }
+
+      filtered.push(segment);
+    }
+
+    return filtered;
+  };
+
+  const filtered: ToolSegment[] = [];
+  let span: ToolSegment[] = [];
+
+  const flushSpan = () => {
+    if (span.length === 0) {
+      return;
+    }
+    filtered.push(...collapseWithinSpan(span));
+    span = [];
+  };
+
+  for (const segment of segments) {
+    if (segment.type === 'text' && segment.text.trim().length > 0) {
+      flushSpan();
+      filtered.push(segment);
       continue;
     }
 
-    collapsed.push(current);
-    index += 1;
+    span.push(segment);
+  }
+  flushSpan();
+
+  const collapsed: ToolSegment[] = [];
+  for (const segment of filtered) {
+    if (segment.type === 'text') {
+      pushTextSegment(collapsed, segment.text);
+      continue;
+    }
+    collapsed.push(segment);
   }
 
   return collapsed;

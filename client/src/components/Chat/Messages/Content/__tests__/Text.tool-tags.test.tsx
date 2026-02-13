@@ -346,4 +346,25 @@ describe('Text tool tag rendering', () => {
     expect(toolCalls[0]).toHaveAttribute('data-progress', '1');
     expect(toolCalls[0]).toHaveAttribute('data-state', 'active');
   });
+
+  test('collapses batched pending blocks followed by completed blocks', () => {
+    const content = [
+      '<tool>search_knowledge_base(query=one)</tool>',
+      '<tool>search_knowledge_base(query=two)</tool>',
+      '<tool>search_knowledge_base(query=one)\nresult-one</tool>',
+      '<tool>search_knowledge_base(query=two)\nresult-two</tool>',
+    ].join('\n\n');
+
+    mockUseMessageContext.mockReturnValue({ isSubmitting: false, isLatestMessage: true } as any);
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCalls = screen.getAllByTestId('tool-call');
+    expect(toolCalls).toHaveLength(2);
+    expect(toolCalls[0]).toHaveAttribute('data-name', 'search_knowledge_base');
+    expect(toolCalls[0]).toHaveAttribute('data-output', 'result-one');
+    expect(toolCalls[0]).toHaveAttribute('data-state', 'active');
+    expect(toolCalls[1]).toHaveAttribute('data-name', 'search_knowledge_base');
+    expect(toolCalls[1]).toHaveAttribute('data-output', 'result-two');
+    expect(toolCalls[1]).toHaveAttribute('data-state', 'active');
+  });
 });

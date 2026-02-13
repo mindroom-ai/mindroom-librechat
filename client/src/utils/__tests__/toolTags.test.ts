@@ -255,7 +255,8 @@ describe('parseToolTags', () => {
       '<tool>search_knowledge_base(query=tools)</tool>\n\n<tool>search_knowledge_base(query=tools)\n[{&quot;name&quot;:&quot;a.md&quot;}]</tool>',
     );
 
-    expect(segments).toEqual([
+    const tools = segments.filter((segment) => segment.type === 'tool');
+    expect(tools).toEqual([
       {
         type: 'tool',
         call: 'search_knowledge_base(query=tools)',
@@ -286,6 +287,63 @@ describe('parseToolTags', () => {
         call: 'search_knowledge_base(query=tools)',
         result: 'result',
         raw: 'search_knowledge_base(query=tools)\nresult',
+      },
+    ]);
+  });
+
+  test('collapses pending tool blocks when matching completions arrive later', () => {
+    const segments = parseToolTags(
+      [
+        '<tool>search_knowledge_base(query=one)</tool>',
+        '<tool>search_knowledge_base(query=two)</tool>',
+        '<tool>search_knowledge_base(query=three)</tool>',
+        '<tool>search_knowledge_base(query=one)\nresult-one</tool>',
+        '<tool>search_knowledge_base(query=two)\nresult-two</tool>',
+        '<tool>search_knowledge_base(query=three)\nresult-three</tool>',
+      ].join('\n\n'),
+    );
+
+    const tools = segments.filter((segment) => segment.type === 'tool');
+    expect(tools).toEqual([
+      {
+        type: 'tool',
+        call: 'search_knowledge_base(query=one)',
+        result: 'result-one',
+        raw: 'search_knowledge_base(query=one)\nresult-one',
+      },
+      {
+        type: 'tool',
+        call: 'search_knowledge_base(query=two)',
+        result: 'result-two',
+        raw: 'search_knowledge_base(query=two)\nresult-two',
+      },
+      {
+        type: 'tool',
+        call: 'search_knowledge_base(query=three)',
+        result: 'result-three',
+        raw: 'search_knowledge_base(query=three)\nresult-three',
+      },
+    ]);
+  });
+
+  test('keeps unmatched pending tool calls', () => {
+    const segments = parseToolTags(
+      '<tool>search_knowledge_base(query=one)</tool>\n\n<tool>search_knowledge_base(query=one)\nresult-one</tool>\n\n<tool>search_knowledge_base(query=two)</tool>',
+    );
+
+    const tools = segments.filter((segment) => segment.type === 'tool');
+    expect(tools).toEqual([
+      {
+        type: 'tool',
+        call: 'search_knowledge_base(query=one)',
+        result: 'result-one',
+        raw: 'search_knowledge_base(query=one)\nresult-one',
+      },
+      {
+        type: 'tool',
+        call: 'search_knowledge_base(query=two)',
+        result: null,
+        raw: 'search_knowledge_base(query=two)',
       },
     ]);
   });
