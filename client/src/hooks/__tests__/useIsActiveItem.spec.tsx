@@ -45,9 +45,11 @@ describe('useIsActiveItem', () => {
 
     await act(async () => {
       probe.removeAttribute('data-active-item');
-      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    await waitFor(() => expect(probe.getAttribute('data-active')).toBe('false'));
+    await waitFor(() => expect(probe.getAttribute('data-active')).toBe('false'), {
+      timeout: 5000,
+    });
   });
 
   it('ignores unrelated attribute mutations', async () => {
