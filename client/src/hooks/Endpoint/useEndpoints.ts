@@ -6,6 +6,7 @@ import {
   EModelEndpoint,
   PermissionTypes,
   getEndpointField,
+  isAssistantsEndpoint,
 } from 'librechat-data-provider';
 import type {
   TEndpointsConfig,
@@ -80,104 +81,110 @@ export const useEndpoints = ({
   );
 
   const mappedEndpoints: Endpoint[] = useMemo(() => {
-    return filteredEndpoints.map((ep) => {
-      const endpointType = getEndpointField(endpointsConfig, ep, 'type');
-      const iconKey = getIconKey({ endpoint: ep, endpointsConfig, endpointType });
-      const Icon = icons[iconKey];
-      const endpointIconURL = getEndpointField(endpointsConfig, ep, 'iconURL');
-      const hasModels =
-        (ep === EModelEndpoint.agents && (agents?.length ?? 0) > 0) ||
-        (ep === EModelEndpoint.assistants && assistants?.length > 0) ||
-        (ep !== EModelEndpoint.assistants &&
+    return filteredEndpoints
+      .map((ep) => {
+        const endpointType = getEndpointField(endpointsConfig, ep, 'type');
+        const iconKey = getIconKey({ endpoint: ep, endpointsConfig, endpointType });
+        const Icon = icons[iconKey];
+        const endpointIconURL = getEndpointField(endpointsConfig, ep, 'iconURL');
+        const hasModels =
+          (ep === EModelEndpoint.agents && (agents?.length ?? 0) > 0) ||
+          (ep === EModelEndpoint.assistants && assistants?.length > 0) ||
+          (ep !== EModelEndpoint.assistants &&
+            ep !== EModelEndpoint.agents &&
+            (modelsQuery.data?.[ep]?.length ?? 0) > 0);
+
+        // Base result object with formatted default icon
+        const result: Endpoint = {
+          value: ep,
+          label: alternateName[ep] || ep,
+          hasModels,
+          icon: Icon
+            ? React.createElement(Icon, {
+                size: 20,
+                className: 'text-text-primary shrink-0 icon-md',
+                iconURL: endpointIconURL,
+                endpoint: ep,
+              })
+            : null,
+        };
+
+        // Handle agents case
+        if (ep === EModelEndpoint.agents && (agents?.length ?? 0) > 0) {
+          result.models = agents?.map((agent) => ({
+            name: agent.id,
+            isGlobal: agent.isPublic ?? false,
+          }));
+          result.agentNames = agents?.reduce((acc, agent) => {
+            acc[agent.id] = agent.name || '';
+            return acc;
+          }, {});
+          result.modelIcons = agents?.reduce((acc, agent) => {
+            acc[agent.id] = agent?.avatar?.filepath;
+            return acc;
+          }, {});
+        }
+
+        // Handle assistants case
+        else if (ep === EModelEndpoint.assistants && assistants.length > 0) {
+          result.models = assistants.map((assistant: { id: string }) => ({
+            name: assistant.id,
+            isGlobal: false,
+          }));
+          result.assistantNames = assistants.reduce(
+            (acc: Record<string, string>, assistant: Assistant) => {
+              acc[assistant.id] = assistant.name || '';
+              return acc;
+            },
+            {},
+          );
+          result.modelIcons = assistants.reduce(
+            (acc: Record<string, string | undefined>, assistant: Assistant) => {
+              acc[assistant.id] = assistant.metadata?.avatar;
+              return acc;
+            },
+            {},
+          );
+        } else if (ep === EModelEndpoint.azureAssistants && azureAssistants.length > 0) {
+          result.models = azureAssistants.map((assistant: { id: string }) => ({
+            name: assistant.id,
+            isGlobal: false,
+          }));
+          result.assistantNames = azureAssistants.reduce(
+            (acc: Record<string, string>, assistant: Assistant) => {
+              acc[assistant.id] = assistant.name || '';
+              return acc;
+            },
+            {},
+          );
+          result.modelIcons = azureAssistants.reduce(
+            (acc: Record<string, string | undefined>, assistant: Assistant) => {
+              acc[assistant.id] = assistant.metadata?.avatar;
+              return acc;
+            },
+            {},
+          );
+        }
+
+        // For other endpoints with models from the modelsQuery
+        else if (
           ep !== EModelEndpoint.agents &&
-          (modelsQuery.data?.[ep]?.length ?? 0) > 0);
+          ep !== EModelEndpoint.assistants &&
+          (modelsQuery.data?.[ep]?.length ?? 0) > 0
+        ) {
+          result.models = modelsQuery.data?.[ep]?.map((model) => ({
+            name: model,
+            isGlobal: false,
+          }));
+        }
 
-      // Base result object with formatted default icon
-      const result: Endpoint = {
-        value: ep,
-        label: alternateName[ep] || ep,
-        hasModels,
-        icon: Icon
-          ? React.createElement(Icon, {
-              size: 20,
-              className: 'text-text-primary shrink-0 icon-md',
-              iconURL: endpointIconURL,
-              endpoint: ep,
-            })
-          : null,
-      };
-
-      // Handle agents case
-      if (ep === EModelEndpoint.agents && (agents?.length ?? 0) > 0) {
-        result.models = agents?.map((agent) => ({
-          name: agent.id,
-          isGlobal: agent.isPublic ?? false,
-        }));
-        result.agentNames = agents?.reduce((acc, agent) => {
-          acc[agent.id] = agent.name || '';
-          return acc;
-        }, {});
-        result.modelIcons = agents?.reduce((acc, agent) => {
-          acc[agent.id] = agent?.avatar?.filepath;
-          return acc;
-        }, {});
-      }
-
-      // Handle assistants case
-      else if (ep === EModelEndpoint.assistants && assistants.length > 0) {
-        result.models = assistants.map((assistant: { id: string }) => ({
-          name: assistant.id,
-          isGlobal: false,
-        }));
-        result.assistantNames = assistants.reduce(
-          (acc: Record<string, string>, assistant: Assistant) => {
-            acc[assistant.id] = assistant.name || '';
-            return acc;
-          },
-          {},
-        );
-        result.modelIcons = assistants.reduce(
-          (acc: Record<string, string | undefined>, assistant: Assistant) => {
-            acc[assistant.id] = assistant.metadata?.avatar;
-            return acc;
-          },
-          {},
-        );
-      } else if (ep === EModelEndpoint.azureAssistants && azureAssistants.length > 0) {
-        result.models = azureAssistants.map((assistant: { id: string }) => ({
-          name: assistant.id,
-          isGlobal: false,
-        }));
-        result.assistantNames = azureAssistants.reduce(
-          (acc: Record<string, string>, assistant: Assistant) => {
-            acc[assistant.id] = assistant.name || '';
-            return acc;
-          },
-          {},
-        );
-        result.modelIcons = azureAssistants.reduce(
-          (acc: Record<string, string | undefined>, assistant: Assistant) => {
-            acc[assistant.id] = assistant.metadata?.avatar;
-            return acc;
-          },
-          {},
-        );
-      }
-
-      // For other endpoints with models from the modelsQuery
-      else if (
-        ep !== EModelEndpoint.agents &&
-        ep !== EModelEndpoint.assistants &&
-        (modelsQuery.data?.[ep]?.length ?? 0) > 0
-      ) {
-        result.models = modelsQuery.data?.[ep]?.map((model) => ({
-          name: model,
-          isGlobal: false,
-        }));
-      }
-
-      return result;
-    });
+        return result;
+      })
+      .filter((ep) => {
+        // Hide endpoints with no models (e.g., blocked by role-based permissions).
+        // Keep assistants endpoints which lazy-load their models on first click.
+        return ep.hasModels || isAssistantsEndpoint(ep.value);
+      });
   }, [filteredEndpoints, endpointsConfig, modelsQuery.data, agents, assistants, azureAssistants]);
 
   return {
