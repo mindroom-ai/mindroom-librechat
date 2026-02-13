@@ -1323,6 +1323,31 @@ export type SummarizationConfig = z.infer<typeof summarizationConfigSchema>;
 
 const customEndpointsSchema = z.array(endpointSchema.partial()).optional();
 
+const roleEndpointModelsSchema = z.object({
+  models: z.array(z.string()),
+});
+
+const roleEndpointsSchema = z
+  .object({
+    [EModelEndpoint.openAI]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.google]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.anthropic]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.azureOpenAI]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.azureAssistants]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.assistants]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.agents]: roleEndpointModelsSchema.optional(),
+    [EModelEndpoint.bedrock]: roleEndpointModelsSchema.optional(),
+    custom: z.record(z.string(), roleEndpointModelsSchema).optional(),
+  })
+  .strict();
+
+const roleConfigSchema = z.object({
+  endpoints: roleEndpointsSchema.optional(),
+});
+
+export const rolesConfigSchema = z.record(z.string(), roleConfigSchema).optional();
+export type TRolesConfig = z.infer<typeof rolesConfigSchema>;
+
 export const configSchema = z.object({
   version: z.string(),
   cache: z.boolean().default(true),
@@ -1370,6 +1395,7 @@ export const configSchema = z.object({
   rateLimits: rateLimitSchema.optional(),
   fileConfig: fileConfigSchema.optional(),
   modelSpecs: specsConfigSchema.optional(),
+  roles: rolesConfigSchema,
   endpoints: z
     .object({
       allowedAddresses: allowedAddressesSchema,
