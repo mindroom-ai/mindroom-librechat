@@ -31,6 +31,7 @@ type ModelSelectorContextType = {
   selectedValues: SelectedValues;
   endpointSearchValues: Record<string, string>;
   searchResults: (t.TModelSpec | Endpoint)[] | null;
+  isRefreshingModels: boolean;
   // LibreChat
   modelSpecs: t.TModelSpec[];
   mappedEndpoints: Endpoint[];
@@ -163,6 +164,7 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
 
   const [searchValue, setSearchValueState] = useState('');
   const [endpointSearchValues, setEndpointSearchValues] = useState<Record<string, string>>({});
+  const [isRefreshingModels, setIsRefreshingModels] = useState(false);
   const lastModelsRefreshAtRef = useRef(0);
   const modelsRefreshPromiseRef = useRef<Promise<void> | null>(null);
 
@@ -209,9 +211,11 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
       })
       .catch(() => {})
       .finally(() => {
+        setIsRefreshingModels(false);
         modelsRefreshPromiseRef.current = null;
       });
 
+    setIsRefreshingModels(true);
     modelsRefreshPromiseRef.current = refreshPromise;
     return refreshPromise;
   }, [queryClient]);
@@ -275,6 +279,7 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
     searchResults,
     selectedValues,
     endpointSearchValues,
+    isRefreshingModels,
     // LibreChat
     agentsMap,
     modelSpecs,

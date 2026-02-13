@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { TooltipAnchor } from '@librechat/client';
+import { Spinner, TooltipAnchor } from '@librechat/client';
 import { getConfigDefaults } from 'librechat-data-provider';
 import type { ModelSelectorProps } from '~/common';
 import {
@@ -28,6 +28,7 @@ function ModelSelectorContent() {
     searchValue,
     searchResults,
     selectedValues,
+    isRefreshingModels,
     // Functions
     setSearchValue,
     setSelectedValues,
@@ -101,6 +102,16 @@ function ModelSelectorContent() {
         comboboxLabel={localize('com_endpoint_search_models')}
         trigger={trigger}
       >
+        {isRefreshingModels && (
+          <div
+            className="flex items-center gap-2 px-2 py-1 text-xs text-text-secondary"
+            role="status"
+            aria-label={localize('com_ui_loading')}
+          >
+            <Spinner className="size-3.5" aria-hidden="true" />
+            <span>{localize('com_ui_loading')}</span>
+          </div>
+        )}
         {searchResults ? (
           renderSearchResults(searchResults, localize, searchValue)
         ) : (
