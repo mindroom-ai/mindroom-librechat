@@ -1,5 +1,7 @@
 import {
+  CacheKeys,
   EModelEndpoint,
+  Time,
   isAgentsEndpoint,
   orderEndpointsConfig,
   defaultAgentCapabilities,
@@ -12,11 +14,50 @@ import { loadCustomEndpointsConfig as defaultLoadCustomEndpoints } from '~/endpo
 type PartialEndpointEntry = Partial<TConfig>;
 type DefaultEndpointsResult = Record<string, PartialEndpointEntry | false | null>;
 type MutableEndpointsConfig = Record<string, PartialEndpointEntry | false | null | undefined>;
+type ConfigCache = {
+  get: (
+    key: string,
+  ) => Promise<TEndpointsConfig | ({ gptPlugins?: unknown } & TEndpointsConfig) | null>;
+  set: (key: string, value: TEndpointsConfig, expires?: number) => Promise<unknown>;
+  delete: (key: string) => Promise<unknown>;
+};
 
 export interface EndpointsConfigDeps {
-  getAppConfig: (params: { role?: string | null; tenantId?: string }) => Promise<AppConfig>;
+  getAppConfig: (params: {
+    role?: string | null;
+    tenantId?: string;
+    openidGroups?: string[];
+  }) => Promise<AppConfig>;
   loadDefaultEndpointsConfig: (appConfig: AppConfig) => Promise<DefaultEndpointsResult>;
   loadCustomEndpointsConfig?: (custom: unknown) => TCustomEndpointsConfig | undefined;
+  getCache?: (cacheKey: string) => ConfigCache;
+}
+
+function getEndpointsCacheKey(role?: string | null, openidGroups?: string[]): string {
+  if (openidGroups && openidGroups.length > 0) {
+    const groupsPart = JSON.stringify([...openidGroups].sort());
+    const rolePart = role || '_';
+    return `${CacheKeys.ENDPOINT_CONFIG}:g:${rolePart}:${groupsPart}`;
+  }
+  return role ? `${CacheKeys.ENDPOINT_CONFIG}:${role}` : CacheKeys.ENDPOINT_CONFIG;
+}
+
+function applyEndpointRestrictions(
+  mergedConfig: MutableEndpointsConfig,
+  restrictions?: Record<string, { models: string[] }>,
+): MutableEndpointsConfig {
+  if (!restrictions) {
+    return mergedConfig;
+  }
+
+  const filteredConfig = { ...mergedConfig };
+  for (const [endpointKey, restriction] of Object.entries(restrictions)) {
+    if (Array.isArray(restriction?.models) && restriction.models.length === 0) {
+      delete filteredConfig[endpointKey];
+    }
+  }
+
+  return filteredConfig;
 }
 
 export function createEndpointsConfigService(deps: EndpointsConfigDeps) {
@@ -24,11 +65,38 @@ export function createEndpointsConfigService(deps: EndpointsConfigDeps) {
     getAppConfig,
     loadDefaultEndpointsConfig,
     loadCustomEndpointsConfig = defaultLoadCustomEndpoints,
+    getCache,
   } = deps;
 
   async function getEndpointsConfig(req: ServerRequest): Promise<TEndpointsConfig> {
-    const appConfig =
-      req.config ?? (await getAppConfig({ role: req.user?.role, tenantId: req.user?.tenantId }));
+    const role = req.user?.role;
+    const tenantId = req.user?.tenantId;
+    const openidGroups = req.user?.openidGroups;
+    const hasScopedContext = Boolean(role || (openidGroups && openidGroups.length > 0));
+    const cacheKey = getEndpointsCacheKey(role, openidGroups);
+    const cache = getCache?.(CacheKeys.CONFIG_STORE);
+    const cachedEndpointsConfig = await cache?.get(cacheKey);
+    if (cachedEndpointsConfig) {
+      if (cachedEndpointsConfig.gptPlugins) {
+        await cache?.delete(cacheKey);
+      } else {
+        return cachedEndpointsConfig;
+      }
+    }
+
+    let shouldCache = true;
+    let appConfig: AppConfig;
+    if (req.config && req.configIsFallback && hasScopedContext) {
+      try {
+        appConfig = await getAppConfig({ role, tenantId, openidGroups });
+      } catch (_error) {
+        appConfig = req.config;
+        shouldCache = false;
+      }
+    } else {
+      appConfig = req.config ?? (await getAppConfig({ role, tenantId, openidGroups }));
+    }
+
     const defaultEndpointsConfig = await loadDefaultEndpointsConfig(appConfig);
     const customEndpointsConfig = loadCustomEndpointsConfig(appConfig?.endpoints?.custom);
 
@@ -100,7 +168,21 @@ export function createEndpointsConfigService(deps: EndpointsConfigDeps) {
       };
     }
 
-    return orderEndpointsConfig(mergedConfig as TEndpointsConfig);
+    const restrictedConfig = applyEndpointRestrictions(
+      mergedConfig,
+      appConfig?._roleModelRestrictions,
+    );
+    const endpointsConfig = orderEndpointsConfig(restrictedConfig as TEndpointsConfig);
+
+    if (cache && shouldCache) {
+      if (openidGroups && openidGroups.length > 0) {
+        await cache.set(cacheKey, endpointsConfig, Time.TEN_MINUTES);
+      } else {
+        await cache.set(cacheKey, endpointsConfig);
+      }
+    }
+
+    return endpointsConfig;
   }
 
   async function checkCapability(
