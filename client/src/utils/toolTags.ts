@@ -13,6 +13,11 @@ const TOOL_CLOSE_TAG = '</tool>';
 const TOOL_TAG_PATTERN = /<tool(?=[\s>])[^>]*>[\s\S]*?<\/tool>/g;
 const FENCED_CODE_PATTERN = /```[\s\S]*?```|~~~[\s\S]*?~~~/g;
 const INLINE_CODE_PATTERN = /(`+)([\s\S]*?)\1/g;
+const TOOL_OPEN_WITH_REQUIRED_ATTRS_PATTERN =
+  /<tool(?=[\s>])(?=[^>]*\bid="[^"]+")(?=[^>]*\bstate="(?:start|done)")[^>]*>/g;
+const TOOL_CLOSE_TAG_PATTERN = /<\/tool>/g;
+const TOOL_OPEN_SEARCH_PATTERN =
+  /<tool(?=[\s>])(?=[^>]*\bid="[^"]+")(?=[^>]*\bstate="(?:start|done)")/;
 
 const decodeHtmlEntities = (value: string): string => {
   if (!value.includes('&')) {
@@ -68,10 +73,46 @@ const pushTextSegment = (segments: ToolSegment[], text: string) => {
   segments.push({ type: 'text', text });
 };
 
+const isInsideToolResult = (text: string, index: number): boolean => {
+  const prefix = text.slice(0, index);
+  const openCount = (prefix.match(TOOL_OPEN_WITH_REQUIRED_ATTRS_PATTERN) ?? []).length;
+  const closeCount = (prefix.match(TOOL_CLOSE_TAG_PATTERN) ?? []).length;
+  return openCount > closeCount;
+};
+
 const maskCodeBlocks = (text: string): string => {
-  const mask = (match: string) => ' '.repeat(match.length);
-  const maskedFences = text.replace(FENCED_CODE_PATTERN, mask);
-  return maskedFences.replace(INLINE_CODE_PATTERN, mask);
+  const mask = (match: string, startIndex: number) => {
+    // Don't mask "code blocks" that started inside a tool result.
+    // Unbalanced backticks in tool content (e.g., truncated text ending with
+    // ```python ...) cause the code-block regex to match across </tool> into
+    // the next <tool>, hiding those tags from the tool-tag parser.
+    // If the opening backticks start inside a tool result and the same
+    // regex match crosses a real </tool> boundary into a following <tool ...>,
+    // this is not a real markdown block in assistant text and should stay
+    // unmasked so the parser can still see tool tags.
+    if (!isInsideToolResult(text, startIndex)) {
+      return ' '.repeat(match.length);
+    }
+
+    const closeIdx = match.indexOf('</tool>');
+    if (closeIdx === -1) {
+      return ' '.repeat(match.length);
+    }
+
+    const openIdx = match.search(TOOL_OPEN_SEARCH_PATTERN);
+    if (openIdx !== -1 && closeIdx < openIdx) {
+      return match;
+    }
+
+    return ' '.repeat(match.length);
+  };
+  const maskedFences = text.replace(FENCED_CODE_PATTERN, (match, offset: number) =>
+    mask(match, offset),
+  );
+  return maskedFences.replace(
+    INLINE_CODE_PATTERN,
+    (match: string, _ticks: string, _content: string, offset: number) => mask(match, offset),
+  );
 };
 
 const hasBalancedToolGroups = (text: string): boolean => {
