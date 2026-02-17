@@ -2,8 +2,10 @@ import { Types } from 'mongoose';
 import {
   AuthType,
   AgentCapabilities,
+  CacheKeys,
   EModelEndpoint,
   PrincipalType,
+  Time,
   defaultAgentCapabilities,
 } from 'librechat-data-provider';
 
@@ -54,7 +56,8 @@ function createMockDeps(overrides: Partial<EndpointsConfigDeps> = {}): Endpoints
 type TestRequestOverrides = {
   body?: Partial<ServerRequest['body']>;
   config?: AppConfig;
-  user?: { id?: string; role?: string; tenantId?: string };
+  configIsFallback?: boolean;
+  user?: { id?: string; role?: string; tenantId?: string; openidGroups?: string[] };
 };
 
 function fakeReq(overrides: TestRequestOverrides = {}): ServerRequest {
@@ -321,6 +324,100 @@ describe('createEndpointsConfigService', () => {
         ]),
       );
       expect(result?.FOO).toEqual(expect.objectContaining({ type: EModelEndpoint.custom }));
+    });
+
+    it('uses a group-scoped cache key with sorted groups and TTL', async () => {
+      const cache = {
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockResolvedValue(undefined),
+        delete: jest.fn().mockResolvedValue(undefined),
+      };
+      const deps = createMockDeps({ getCache: jest.fn(() => cache) });
+      const { getEndpointsConfig } = createEndpointsConfigService(deps);
+
+      await getEndpointsConfig(
+        fakeReq({ user: { id: 'u1', role: 'USER', openidGroups: ['group-b', 'group-a'] } }),
+      );
+
+      const cacheKey = `${CacheKeys.ENDPOINT_CONFIG}:u:u1:g:USER:["group-a","group-b"]`;
+      expect(cache.get).toHaveBeenCalledWith(cacheKey);
+      expect(deps.getAppConfig).toHaveBeenCalledWith({
+        role: 'USER',
+        userId: 'u1',
+        tenantId: undefined,
+        openidGroups: ['group-b', 'group-a'],
+      });
+      expect(cache.set).toHaveBeenCalledWith(cacheKey, expect.any(Object), Time.TEN_MINUTES);
+    });
+
+    it('returns cached config when present and valid', async () => {
+      const cached = { [EModelEndpoint.openAI]: { userProvide: false } };
+      const cache = {
+        get: jest.fn().mockResolvedValue(cached),
+        set: jest.fn(),
+        delete: jest.fn(),
+      };
+      const deps = createMockDeps({ getCache: jest.fn(() => cache) });
+      const { getEndpointsConfig } = createEndpointsConfigService(deps);
+
+      const result = await getEndpointsConfig(fakeReq());
+
+      expect(result).toBe(cached);
+      expect(deps.getAppConfig).not.toHaveBeenCalled();
+      expect(cache.set).not.toHaveBeenCalled();
+    });
+
+    it('hides endpoints with empty model restrictions', async () => {
+      const deps = createMockDeps({
+        loadDefaultEndpointsConfig: jest.fn().mockResolvedValue({
+          [EModelEndpoint.openAI]: { userProvide: false, order: 0 },
+          [EModelEndpoint.google]: { userProvide: false, order: 1 },
+        }),
+        getAppConfig: jest.fn().mockResolvedValue(
+          appConfig({
+            endpoints: {},
+            _roleModelRestrictions: {
+              [EModelEndpoint.openAI]: { models: [] },
+              [EModelEndpoint.google]: { models: ['gemini-1.5-pro'] },
+            },
+          }),
+        ),
+      });
+      const { getEndpointsConfig } = createEndpointsConfigService(deps);
+
+      const result = await getEndpointsConfig(fakeReq());
+
+      expect(result?.[EModelEndpoint.openAI]).toBeUndefined();
+      expect(result?.[EModelEndpoint.google]).toBeDefined();
+    });
+
+    it('does not cache scoped entries from fallback req.config when scoped lookup fails', async () => {
+      const cache = {
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn(),
+        delete: jest.fn(),
+      };
+      const deps = createMockDeps({
+        getCache: jest.fn(() => cache),
+        getAppConfig: jest.fn().mockRejectedValueOnce(new Error('scoped lookup failed')),
+      });
+      const { getEndpointsConfig } = createEndpointsConfigService(deps);
+
+      await getEndpointsConfig(
+        fakeReq({
+          user: { id: 'u1', role: 'USER', openidGroups: ['group-a'] },
+          config: appConfig({ endpoints: {} }),
+          configIsFallback: true,
+        }),
+      );
+
+      expect(deps.getAppConfig).toHaveBeenCalledWith({
+        role: 'USER',
+        userId: 'u1',
+        tenantId: undefined,
+        openidGroups: ['group-a'],
+      });
+      expect(cache.set).not.toHaveBeenCalled();
     });
   });
 

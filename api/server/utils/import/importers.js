@@ -1,7 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
-const { logger, getTenantId } = require('@librechat/data-schemas');
+const { logger } = require('@librechat/data-schemas');
 const { EModelEndpoint, Constants, openAISettings } = require('librechat-data-provider');
-const { getEndpointsConfig } = require('~/server/services/Config');
 const { createImportBatchBuilder } = require('./importBatchBuilder');
 const { resolveImportDefaultModel } = require('./defaults');
 const { cloneMessagesWithTimestamps } = require('./fork');
@@ -54,7 +53,7 @@ async function importChatBotUiConvo(
   jsonData,
   requestUserId,
   builderFactory = createImportBatchBuilder,
-  userRole,
+  importContext = {},
 ) {
   // this have been tested with chatbot-ui V1 export https://github.com/mckaywrigley/chatbot-ui/tree/b865b0555f53957e96727bc0bbb369c9eaecd83b#legacy-code
   try {
@@ -63,7 +62,7 @@ async function importChatBotUiConvo(
     const defaultModel = await resolveImportDefaultModel({
       endpoint: EModelEndpoint.openAI,
       requestUserId,
-      userRole,
+      userRole: importContext?.userRole,
     });
 
     for (const historyItem of jsonData.history) {
@@ -122,14 +121,14 @@ async function importClaudeConvo(
   jsonData,
   requestUserId,
   builderFactory = createImportBatchBuilder,
-  userRole,
+  importContext = {},
 ) {
   try {
     const importBatchBuilder = builderFactory(requestUserId);
     const defaultModel = await resolveImportDefaultModel({
       endpoint: EModelEndpoint.anthropic,
       requestUserId,
-      userRole,
+      userRole: importContext?.userRole,
     });
 
     for (const conv of jsonData) {
@@ -206,13 +205,14 @@ async function importClaudeConvo(
  * @param {Object} jsonData - The JSON data representing the conversation.
  * @param {string} requestUserId - The ID of the user making the import request.
  * @param {Function} [builderFactory=createImportBatchBuilder] - The factory function to create an import batch builder.
+ * @param {{ endpointsConfig?: TEndpointsConfig }} [importContext] - Import context with optional endpoints config.
  * @returns {Promise<void>} - A promise that resolves when the import is complete.
  */
 async function importLibreChatConvo(
   jsonData,
   requestUserId,
   builderFactory = createImportBatchBuilder,
-  userRole,
+  importContext = {},
 ) {
   try {
     /** @type {ImportBatchBuilder} */
@@ -221,11 +221,9 @@ async function importLibreChatConvo(
 
     /* Endpoint configuration */
     let endpoint = jsonData.endpoint ?? options.endpoint ?? EModelEndpoint.openAI;
-    const endpointsConfig = await getEndpointsConfig({
-      user: { id: requestUserId, role: userRole, tenantId: getTenantId() },
-    });
+    const endpointsConfig = importContext?.endpointsConfig;
     const endpointConfig = endpointsConfig?.[endpoint];
-    if (!endpointConfig && endpointsConfig) {
+    if (!endpointConfig && endpointsConfig && Object.keys(endpointsConfig).length > 0) {
       endpoint = Object.keys(endpointsConfig)[0];
     } else if (!endpointConfig) {
       endpoint = EModelEndpoint.openAI;
@@ -236,7 +234,7 @@ async function importLibreChatConvo(
     const defaultModel = await resolveImportDefaultModel({
       endpoint,
       requestUserId,
-      userRole,
+      userRole: importContext?.userRole,
     });
 
     let firstMessageDate = null;
@@ -321,14 +319,14 @@ async function importChatGptConvo(
   jsonData,
   requestUserId,
   builderFactory = createImportBatchBuilder,
-  userRole,
+  importContext = {},
 ) {
   try {
     const importBatchBuilder = builderFactory(requestUserId);
     const defaultModel = await resolveImportDefaultModel({
       endpoint: EModelEndpoint.openAI,
       requestUserId,
-      userRole,
+      userRole: importContext?.userRole,
     });
     for (const conv of jsonData) {
       processConversation(conv, importBatchBuilder, requestUserId, defaultModel);
