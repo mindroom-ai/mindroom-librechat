@@ -1,12 +1,8 @@
-jest.mock(
-  '@librechat/data-schemas',
-  () => ({
-    logger: {
-      error: jest.fn(),
-    },
-  }),
-  { virtual: true },
-);
+jest.mock('@librechat/data-schemas', () => ({
+  logger: {
+    error: jest.fn(),
+  },
+}));
 
 jest.mock('~/server/services/Config', () => ({
   getAppConfig: jest.fn(),
