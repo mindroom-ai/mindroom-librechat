@@ -6,7 +6,9 @@ const configMiddleware = async (req, res, next) => {
     const userRole = req.user?.role;
     const userId = req.user?.id;
     const tenantId = req.user?.tenantId;
-    req.config = await getAppConfig({ role: userRole, userId, tenantId });
+    const openidGroups = req.user?.openidGroups;
+    req.config = await getAppConfig({ role: userRole, userId, tenantId, openidGroups });
+    req.configIsFallback = false;
 
     next();
   } catch (error) {
@@ -18,6 +20,7 @@ const configMiddleware = async (req, res, next) => {
 
     try {
       req.config = await getAppConfig({ tenantId: req.user?.tenantId });
+      req.configIsFallback = true;
       next();
     } catch (fallbackError) {
       logger.error('Fallback config middleware error:', fallbackError);

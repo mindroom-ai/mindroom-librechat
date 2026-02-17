@@ -8,9 +8,10 @@ const maxFileSize = resolveImportMaxFileSize();
 
 /**
  * Job definition for importing a conversation.
- * @param {{ filepath: string, requestUserId: string, userRole?: string, interfaceConfig?: object }} job
+ * @param {{ filepath: string, requestUserId: string, userRole?: string, interfaceConfig?: object }} job - The job object.
+ * @param {{ endpointsConfig?: TEndpointsConfig, userRole?: string }} [importContext] - Optional import context.
  */
-const importConversations = async (job) => {
+const importConversations = async (job, importContext = {}) => {
   const { filepath, requestUserId, userRole, interfaceConfig } = job;
   try {
     logger.debug(`user: ${requestUserId} | Importing conversation(s) from file...`);
@@ -29,7 +30,10 @@ const importConversations = async (job) => {
       jsonData,
       requestUserId,
       (userId) => createImportBatchBuilder(userId, interfaceConfig),
-      userRole,
+      {
+        ...importContext,
+        userRole: importContext.userRole ?? userRole,
+      },
     );
     logger.debug(`user: ${requestUserId} | Finished importing conversations`);
   } catch (error) {
