@@ -8,9 +8,10 @@ const maxFileSize = resolveImportMaxFileSize();
 
 /**
  * Job definition for importing a conversation.
- * @param {{ filepath: string, requestUserId: string, userRole?: string, interfaceConfig?: object, filters?: object, legacyPii?: object }} job
+ * @param {{ filepath: string, requestUserId: string, userRole?: string, interfaceConfig?: object, filters?: object, legacyPii?: object }} job - The job object.
+ * @param {{ endpointsConfig?: TEndpointsConfig, userRole?: string }} [importContext] - Optional import context.
  */
-const importConversations = async (job) => {
+const importConversations = async (job, importContext = {}) => {
   const { filepath, requestUserId, userRole, interfaceConfig, filters, legacyPii } = job;
   try {
     logger.debug(`user: ${requestUserId} | Importing conversation(s) from file...`);
@@ -32,7 +33,10 @@ const importConversations = async (job) => {
         legacyPii == null
           ? createImportBatchBuilder(userId, interfaceConfig, filters)
           : createImportBatchBuilder(userId, interfaceConfig, filters, legacyPii),
-      userRole,
+      {
+        ...importContext,
+        userRole: importContext.userRole ?? userRole,
+      },
     );
     logger.debug(`user: ${requestUserId} | Finished importing conversations`);
   } catch (error) {

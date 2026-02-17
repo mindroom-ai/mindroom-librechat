@@ -43,6 +43,9 @@ jest.mock('~/server/middleware', () => {
 
 jest.mock('~/server/utils/import/fork', () => require(MOCKS).forkUtils());
 jest.mock('~/server/utils/import', () => require(MOCKS).importUtils());
+jest.mock('~/server/services/Config', () => ({
+  getEndpointsConfig: jest.fn().mockResolvedValue({}),
+}));
 jest.mock('~/server/routes/files/multer', () => require(MOCKS).multerSetup());
 jest.mock('multer', () => require(MOCKS).multerLib());
 jest.mock('~/server/services/Endpoints/azureAssistants', () => require(MOCKS).assistantEndpoint());

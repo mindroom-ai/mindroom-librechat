@@ -1,3 +1,4 @@
+const fs = require('fs').promises;
 const multer = require('multer');
 const express = require('express');
 const { sleep } = require('@librechat/agents');
@@ -57,6 +58,7 @@ const {
 } = require('~/server/services/Endpoints/agents/backgroundCompletion');
 const getLogStores = require('~/cache/getLogStores');
 const db = require('~/models');
+const { getEndpointsConfig } = require('~/server/services/Config');
 
 const assistantClients = {
   [EModelEndpoint.azureAssistants]: require('~/server/services/Endpoints/azureAssistants'),
@@ -785,20 +787,32 @@ router.post(
   handleUpload,
   restoreTenantContextFromReq,
   async (req, res) => {
+    let importStarted = false;
     try {
       /* TODO: optimize to return imported conversations and add manually */
-      await importConversations({
-        filepath: req.file.path,
-        requestUserId: req.user.id,
-        userRole: req.user.role,
-        interfaceConfig: req.config?.interfaceConfig,
-        filters: req.config?.filters,
-        ...(req.config?.messageFilter?.pii == null
-          ? {}
-          : { legacyPii: req.config.messageFilter.pii }),
-      });
+      const endpointsConfig = await getEndpointsConfig(req);
+      importStarted = true;
+      await importConversations(
+        {
+          filepath: req.file.path,
+          requestUserId: req.user.id,
+          interfaceConfig: req.config?.interfaceConfig,
+          filters: req.config?.filters,
+          ...(req.config?.messageFilter?.pii == null
+            ? {}
+            : { legacyPii: req.config.messageFilter.pii }),
+        },
+        { endpointsConfig, userRole: req.user.role },
+      );
       res.status(201).json({ message: 'Conversation(s) imported successfully' });
     } catch (error) {
+      if (!importStarted && req.file?.path) {
+        try {
+          await fs.unlink(req.file.path);
+        } catch (cleanupError) {
+          logger.error(`Failed to delete import temp file: ${req.file.path}`, cleanupError);
+        }
+      }
       if (isContentFilterError(error)) {
         return res.status(error.statusCode).json(error.body);
       }

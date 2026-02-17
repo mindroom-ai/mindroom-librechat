@@ -23,6 +23,11 @@ process.env.LIMIT_MESSAGE_USER = 'true';
 const checkpointNamespace = (id) =>
   `${require(MOCKS).ownerPrefix('test-user-123')}00000000-0000-4000-8000-${String(id).padStart(12, '0')}`;
 
+jest.mock('fs', () => ({
+  promises: {
+    unlink: jest.fn(),
+  },
+}));
 jest.mock('@librechat/agents', () => require(MOCKS).agents());
 jest.mock('@librechat/api', () =>
   require(MOCKS).api({
@@ -47,6 +52,9 @@ jest.mock('~/server/middleware/requireJwtAuth', () => require(MOCKS).requireJwtA
 jest.mock('~/server/middleware', () => require(MOCKS).middlewarePassthrough());
 jest.mock('~/server/utils/import/fork', () => require(MOCKS).forkUtils());
 jest.mock('~/server/utils/import', () => require(MOCKS).importUtils());
+jest.mock('~/server/services/Config', () => ({
+  getEndpointsConfig: jest.fn().mockResolvedValue({}),
+}));
 jest.mock('~/cache/getLogStores', () => require(MOCKS).logStores());
 jest.mock('~/server/routes/files/multer', () => require(MOCKS).multerSetup());
 jest.mock('multer', () => require(MOCKS).multerLib());
@@ -75,6 +83,9 @@ describe('Convos Routes', () => {
     deleteConvoSharedLinksWithCleanup,
   } = require('@librechat/api');
   const subagentThreadStore = require('~/server/services/Endpoints/agents/subagentThreadStore');
+  const { importConversations } = require('~/server/utils/import');
+  const { getEndpointsConfig } = require('~/server/services/Config');
+  const fs = require('fs');
 
   beforeAll(() => {
     convosRouter = require('../convos');
@@ -243,23 +254,25 @@ describe('Convos Routes', () => {
       const response = await request(app).post('/api/convos/import');
 
       expect(response.status).toBe(201);
-      expect(importConversations).toHaveBeenCalledWith({
-        filepath: '/tmp/test-file.json',
-        requestUserId: 'test-user-123',
-        userRole: 'USER',
-        interfaceConfig: undefined,
-        filters: {
-          messages: {
-            pii: {
-              fields: ['text'],
-              starterPatterns: ['sk_prefix'],
+      expect(importConversations).toHaveBeenCalledWith(
+        {
+          filepath: '/tmp/test-file.json',
+          requestUserId: 'test-user-123',
+          interfaceConfig: undefined,
+          filters: {
+            messages: {
+              pii: {
+                fields: ['text'],
+                starterPatterns: ['sk_prefix'],
+              },
             },
           },
+          legacyPii: {
+            starterPatterns: ['sk_prefix'],
+          },
         },
-        legacyPii: {
-          starterPatterns: ['sk_prefix'],
-        },
-      });
+        { endpointsConfig: {}, userRole: 'USER' },
+      );
     });
 
     it('returns only metadata-safe filter details for a blocked import', async () => {
@@ -1906,6 +1919,47 @@ describe('Convos Routes', () => {
       expect(getConvosByCursor).toHaveBeenCalledWith(
         'test-user-123',
         expect.objectContaining({ sortBy: 'updatedAt', sortDirection: 'desc' }),
+      );
+    });
+  });
+
+  describe('POST /import scoped endpoints config', () => {
+    it('cleans up temp upload when endpoint config lookup fails before import starts', async () => {
+      getEndpointsConfig.mockRejectedValueOnce(new Error('config failed'));
+
+      const response = await request(app).post('/api/convos/import');
+
+      expect(response.status).toBe(500);
+      expect(importConversations).not.toHaveBeenCalled();
+      expect(fs.promises.unlink).toHaveBeenCalledWith('/tmp/test-file.json');
+    });
+
+    it('passes endpointsConfig into importConversations', async () => {
+      const endpointsConfig = { openAI: { userProvide: false } };
+      getEndpointsConfig.mockResolvedValueOnce(endpointsConfig);
+      importConversations.mockResolvedValueOnce();
+
+      const response = await request(app).post('/api/convos/import');
+
+      expect(response.status).toBe(201);
+      expect(importConversations).toHaveBeenCalledWith(
+        {
+          filepath: '/tmp/test-file.json',
+          requestUserId: 'test-user-123',
+          interfaceConfig: undefined,
+          filters: {
+            messages: {
+              pii: {
+                fields: ['text'],
+                starterPatterns: ['sk_prefix'],
+              },
+            },
+          },
+          legacyPii: {
+            starterPatterns: ['sk_prefix'],
+          },
+        },
+        { endpointsConfig, userRole: 'USER' },
       );
     });
   });

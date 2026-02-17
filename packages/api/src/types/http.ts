@@ -33,6 +33,8 @@ export type RequestBody = {
 export type ServerRequest = Request<unknown, unknown, RequestBody> & {
   user?: IUser;
   config?: AppConfig;
+  /** True when config middleware had to attach unscoped fallback config. */
+  configIsFallback?: boolean;
   /** Server-captured generation start time used to anchor dynamic prompt variables. */
   turnStartedAt?: number;
   /** Server-captured conversation creation time used when inserting conversation metadata. */
