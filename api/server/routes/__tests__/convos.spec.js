@@ -1,6 +1,12 @@
 const express = require('express');
 const request = require('supertest');
 
+jest.mock('fs', () => ({
+  promises: {
+    unlink: jest.fn(),
+  },
+}));
+
 jest.mock('@librechat/agents', () => ({
   sleep: jest.fn(),
 }));
@@ -71,6 +77,10 @@ jest.mock('~/server/utils/import', () => ({
   importConversations: jest.fn(),
 }));
 
+jest.mock('~/server/services/Config', () => ({
+  getEndpointsConfig: jest.fn().mockResolvedValue({}),
+}));
+
 jest.mock('~/cache/getLogStores', () => jest.fn());
 
 jest.mock('~/server/routes/files/multer', () => ({
@@ -111,6 +121,9 @@ describe('Convos Routes', () => {
   const { deleteAllSharedLinks, deleteConvoSharedLink } = require('~/models');
   const { deleteConvos, saveConvo } = require('~/models/Conversation');
   const { deleteToolCalls } = require('~/models/ToolCall');
+  const { importConversations } = require('~/server/utils/import');
+  const { getEndpointsConfig } = require('~/server/services/Config');
+  const fs = require('fs');
 
   beforeAll(() => {
     convosRouter = require('../convos');
@@ -493,6 +506,32 @@ describe('Convos Routes', () => {
 
       /** Verify it was called after the conversation was deleted */
       expect(deleteConvoSharedLink).toHaveBeenCalledAfter(deleteConvos);
+    });
+  });
+
+  describe('POST /import', () => {
+    it('cleans up temp upload when endpoint config lookup fails before import starts', async () => {
+      getEndpointsConfig.mockRejectedValueOnce(new Error('config failed'));
+
+      const response = await request(app).post('/api/convos/import');
+
+      expect(response.status).toBe(500);
+      expect(importConversations).not.toHaveBeenCalled();
+      expect(fs.promises.unlink).toHaveBeenCalledWith('/tmp/test-file.json');
+    });
+
+    it('passes endpointsConfig into importConversations', async () => {
+      const endpointsConfig = { openAI: { userProvide: false } };
+      getEndpointsConfig.mockResolvedValueOnce(endpointsConfig);
+      importConversations.mockResolvedValueOnce();
+
+      const response = await request(app).post('/api/convos/import');
+
+      expect(response.status).toBe(201);
+      expect(importConversations).toHaveBeenCalledWith(
+        { filepath: '/tmp/test-file.json', requestUserId: 'test-user-123' },
+        { endpointsConfig },
+      );
     });
   });
 

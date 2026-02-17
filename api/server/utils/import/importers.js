@@ -1,9 +1,8 @@
 const { v4: uuidv4 } = require('uuid');
 const { logger } = require('@librechat/data-schemas');
-const { EModelEndpoint, Constants, openAISettings, CacheKeys } = require('librechat-data-provider');
+const { EModelEndpoint, Constants, openAISettings } = require('librechat-data-provider');
 const { createImportBatchBuilder } = require('./importBatchBuilder');
 const { cloneMessagesWithTimestamps } = require('./fork');
-const getLogStores = require('~/cache/getLogStores');
 
 /**
  * Returns the appropriate importer function based on the provided JSON data.
@@ -188,12 +187,14 @@ async function importClaudeConvo(
  * @param {Object} jsonData - The JSON data representing the conversation.
  * @param {string} requestUserId - The ID of the user making the import request.
  * @param {Function} [builderFactory=createImportBatchBuilder] - The factory function to create an import batch builder.
+ * @param {{ endpointsConfig?: TEndpointsConfig }} [importContext] - Import context with optional endpoints config.
  * @returns {Promise<void>} - A promise that resolves when the import is complete.
  */
 async function importLibreChatConvo(
   jsonData,
   requestUserId,
   builderFactory = createImportBatchBuilder,
+  importContext = {},
 ) {
   try {
     /** @type {ImportBatchBuilder} */
@@ -202,10 +203,9 @@ async function importLibreChatConvo(
 
     /* Endpoint configuration */
     let endpoint = jsonData.endpoint ?? options.endpoint ?? EModelEndpoint.openAI;
-    const cache = getLogStores(CacheKeys.CONFIG_STORE);
-    const endpointsConfig = await cache.get(CacheKeys.ENDPOINT_CONFIG);
+    const endpointsConfig = importContext?.endpointsConfig;
     const endpointConfig = endpointsConfig?.[endpoint];
-    if (!endpointConfig && endpointsConfig) {
+    if (!endpointConfig && endpointsConfig && Object.keys(endpointsConfig).length > 0) {
       endpoint = Object.keys(endpointsConfig)[0];
     } else if (!endpointConfig) {
       endpoint = EModelEndpoint.openAI;

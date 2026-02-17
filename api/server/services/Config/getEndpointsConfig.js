@@ -5,10 +5,50 @@ const {
   isAgentsEndpoint,
   orderEndpointsConfig,
   defaultAgentCapabilities,
+  Time,
 } = require('librechat-data-provider');
 const loadDefaultEndpointsConfig = require('./loadDefaultEConfig');
 const getLogStores = require('~/cache/getLogStores');
 const { getAppConfig } = require('./app');
+
+/**
+ * Build cache key for endpoints config, scoped to role/groups.
+ * @param {string | undefined} role
+ * @param {string[] | undefined} openidGroups
+ * @returns {string}
+ */
+function getEndpointsCacheKey(role, openidGroups) {
+  if (openidGroups && openidGroups.length > 0) {
+    const groupsPart = JSON.stringify([...openidGroups].sort());
+    const rolePart = role || '_';
+    return `${CacheKeys.ENDPOINT_CONFIG}:g:${rolePart}:${groupsPart}`;
+  }
+  return role ? `${CacheKeys.ENDPOINT_CONFIG}:${role}` : CacheKeys.ENDPOINT_CONFIG;
+}
+
+/**
+ * Remove endpoints explicitly blocked by role/group model restrictions.
+ * A restriction with `models: []` means hide the endpoint completely.
+ *
+ * @param {TEndpointsConfig} mergedConfig
+ * @param {Record<string, { models: string[] }> | undefined} restrictions
+ * @returns {TEndpointsConfig}
+ */
+function applyEndpointRestrictions(mergedConfig, restrictions) {
+  if (!restrictions) {
+    return mergedConfig;
+  }
+
+  const filteredConfig = { ...mergedConfig };
+
+  for (const [endpointKey, restriction] of Object.entries(restrictions)) {
+    if (Array.isArray(restriction?.models) && restriction.models.length === 0) {
+      delete filteredConfig[endpointKey];
+    }
+  }
+
+  return filteredConfig;
+}
 
 /**
  *
@@ -16,17 +56,35 @@ const { getAppConfig } = require('./app');
  * @returns {Promise<TEndpointsConfig>}
  */
 async function getEndpointsConfig(req) {
+  const role = req.user?.role;
+  const openidGroups = req.user?.openidGroups;
+  const hasScopedContext = Boolean(role || (openidGroups && openidGroups.length > 0));
+  const cacheKey = getEndpointsCacheKey(role, openidGroups);
   const cache = getLogStores(CacheKeys.CONFIG_STORE);
-  const cachedEndpointsConfig = await cache.get(CacheKeys.ENDPOINT_CONFIG);
+  const cachedEndpointsConfig = await cache.get(cacheKey);
   if (cachedEndpointsConfig) {
     if (cachedEndpointsConfig.gptPlugins) {
-      await cache.delete(CacheKeys.ENDPOINT_CONFIG);
+      await cache.delete(cacheKey);
     } else {
       return cachedEndpointsConfig;
     }
   }
 
-  const appConfig = req.config ?? (await getAppConfig({ role: req.user?.role }));
+  /** Do not cache scoped entries from unscoped fallback config. */
+  let shouldCache = true;
+  let appConfig;
+
+  if (req.config && req.configIsFallback && hasScopedContext) {
+    try {
+      appConfig = await getAppConfig({ role, openidGroups });
+    } catch (_error) {
+      appConfig = req.config;
+      shouldCache = false;
+    }
+  } else {
+    appConfig = req.config ?? (await getAppConfig({ role, openidGroups }));
+  }
+
   const defaultEndpointsConfig = await loadDefaultEndpointsConfig(appConfig);
   const customEndpointsConfig = loadCustomEndpointsConfig(appConfig?.endpoints?.custom);
 
@@ -109,9 +167,19 @@ async function getEndpointsConfig(req) {
     };
   }
 
-  const endpointsConfig = orderEndpointsConfig(mergedConfig);
+  const restrictedConfig = applyEndpointRestrictions(
+    mergedConfig,
+    appConfig?._roleModelRestrictions,
+  );
+  const endpointsConfig = orderEndpointsConfig(restrictedConfig);
 
-  await cache.set(CacheKeys.ENDPOINT_CONFIG, endpointsConfig);
+  if (shouldCache) {
+    if (openidGroups && openidGroups.length > 0) {
+      await cache.set(cacheKey, endpointsConfig, Time.TEN_MINUTES);
+    } else {
+      await cache.set(cacheKey, endpointsConfig);
+    }
+  }
   return endpointsConfig;
 }
 
