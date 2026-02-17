@@ -5,13 +5,6 @@ const { bulkSaveConvos: _bulkSaveConvos } = require('~/models/Conversation');
 const { getImporter, processAssistantMessage } = require('./importers');
 const { ImportBatchBuilder } = require('./importBatchBuilder');
 const { bulkSaveMessages } = require('~/models/Message');
-const getLogStores = require('~/cache/getLogStores');
-
-jest.mock('~/cache/getLogStores');
-const mockedCacheGet = jest.fn();
-getLogStores.mockImplementation(() => ({
-  get: mockedCacheGet,
-}));
 
 // Mock the database methods
 jest.mock('~/models/Conversation', () => ({
@@ -761,9 +754,6 @@ describe('importLibreChatConvo', () => {
   );
 
   it('should import conversation correctly', async () => {
-    mockedCacheGet.mockResolvedValue({
-      [EModelEndpoint.openAI]: {},
-    });
     const expectedNumberOfMessages = 6;
     const jsonData = JSON.parse(
       fs.readFileSync(path.join(__dirname, '__data__', 'librechat-export.json'), 'utf8'),
@@ -778,7 +768,9 @@ describe('importLibreChatConvo', () => {
     jest.spyOn(importBatchBuilder, 'saveBatch');
 
     const importer = getImporter(jsonData);
-    await importer(jsonData, requestUserId, () => importBatchBuilder);
+    await importer(jsonData, requestUserId, () => importBatchBuilder, {
+      endpointsConfig: { [EModelEndpoint.openAI]: {} },
+    });
 
     expect(importBatchBuilder.startConversation).toHaveBeenCalledWith(EModelEndpoint.openAI);
     expect(importBatchBuilder.saveMessage).toHaveBeenCalledTimes(expectedNumberOfMessages);
@@ -787,10 +779,6 @@ describe('importLibreChatConvo', () => {
   });
 
   it('should import linear, non-recursive thread correctly with correct endpoint', async () => {
-    mockedCacheGet.mockResolvedValue({
-      [EModelEndpoint.azureOpenAI]: {},
-    });
-
     const jsonData = JSON.parse(
       fs.readFileSync(path.join(__dirname, '__data__', 'librechat-linear.json'), 'utf8'),
     );
@@ -803,7 +791,9 @@ describe('importLibreChatConvo', () => {
     jest.spyOn(importBatchBuilder, 'saveBatch');
 
     const importer = getImporter(jsonData);
-    await importer(jsonData, requestUserId, () => importBatchBuilder);
+    await importer(jsonData, requestUserId, () => importBatchBuilder, {
+      endpointsConfig: { [EModelEndpoint.azureOpenAI]: {} },
+    });
 
     expect(bulkSaveMessages).toHaveBeenCalledTimes(1);
 
@@ -927,15 +917,14 @@ describe('importLibreChatConvo', () => {
   });
 
   it('should retain properties from the original conversation as well as new settings', async () => {
-    mockedCacheGet.mockResolvedValue({
-      [EModelEndpoint.azureOpenAI]: {},
-    });
     const requestUserId = 'user-123';
     const importBatchBuilder = new ImportBatchBuilder(requestUserId);
     jest.spyOn(importBatchBuilder, 'finishConversation');
 
     const importer = getImporter(jsonDataNonRecursiveBranches);
-    await importer(jsonDataNonRecursiveBranches, requestUserId, () => importBatchBuilder);
+    await importer(jsonDataNonRecursiveBranches, requestUserId, () => importBatchBuilder, {
+      endpointsConfig: { [EModelEndpoint.azureOpenAI]: {} },
+    });
 
     expect(importBatchBuilder.finishConversation).toHaveBeenCalledTimes(1);
 

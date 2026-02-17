@@ -1,3 +1,4 @@
+const fs = require('fs').promises;
 const multer = require('multer');
 const express = require('express');
 const { sleep } = require('@librechat/agents');
@@ -18,6 +19,7 @@ const requireJwtAuth = require('~/server/middleware/requireJwtAuth');
 const { importConversations } = require('~/server/utils/import');
 const { deleteToolCalls } = require('~/models/ToolCall');
 const getLogStores = require('~/cache/getLogStores');
+const { getEndpointsConfig } = require('~/server/services/Config');
 
 const assistantClients = {
   [EModelEndpoint.azureAssistants]: require('~/server/services/Endpoints/azureAssistants'),
@@ -240,11 +242,24 @@ router.post(
   configMiddleware,
   upload.single('file'),
   async (req, res) => {
+    let importStarted = false;
     try {
       /* TODO: optimize to return imported conversations and add manually */
-      await importConversations({ filepath: req.file.path, requestUserId: req.user.id });
+      const endpointsConfig = await getEndpointsConfig(req);
+      importStarted = true;
+      await importConversations(
+        { filepath: req.file.path, requestUserId: req.user.id },
+        { endpointsConfig },
+      );
       res.status(201).json({ message: 'Conversation(s) imported successfully' });
     } catch (error) {
+      if (!importStarted && req.file?.path) {
+        try {
+          await fs.unlink(req.file.path);
+        } catch (cleanupError) {
+          logger.error(`Failed to delete import temp file: ${req.file.path}`, cleanupError);
+        }
+      }
       logger.error('Error processing file', error);
       res.status(500).send('Error processing file');
     }

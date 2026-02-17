@@ -4,7 +4,9 @@ const { getAppConfig } = require('~/server/services/Config');
 const configMiddleware = async (req, res, next) => {
   try {
     const userRole = req.user?.role;
-    req.config = await getAppConfig({ role: userRole });
+    const openidGroups = req.user?.openidGroups;
+    req.config = await getAppConfig({ role: userRole, openidGroups });
+    req.configIsFallback = false;
 
     next();
   } catch (error) {
@@ -16,6 +18,7 @@ const configMiddleware = async (req, res, next) => {
 
     try {
       req.config = await getAppConfig();
+      req.configIsFallback = true;
       next();
     } catch (fallbackError) {
       logger.error('Fallback config middleware error:', fallbackError);
