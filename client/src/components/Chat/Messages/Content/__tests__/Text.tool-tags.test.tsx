@@ -342,6 +342,26 @@ describe('Text tool tag rendering', () => {
     expect(markdown.textContent).toContain('```');
   });
 
+  test('keeps fenced docs with closing-before-opening tool text as markdown', () => {
+    const content = [
+      '```txt',
+      '</tool>',
+      '<tool id="1" state="done">save_file(file=a.py)',
+      'ok</tool>',
+      '```',
+    ].join('\n');
+
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    expect(screen.queryByTestId('tool-call')).not.toBeInTheDocument();
+    const markdown = screen.getByTestId('markdown');
+    expect(markdown.textContent).toContain('```txt');
+    expect(markdown.textContent).toContain('</tool>');
+    expect(markdown.textContent).toContain('<tool id="1" state="done">save_file(file=a.py)');
+    expect(markdown.textContent).toContain('ok</tool>');
+    expect(markdown.textContent).toContain('```');
+  });
+
   test('keeps fenced examples as markdown and renders real tool tag outside fence', () => {
     const content = [
       '```txt',
@@ -429,5 +449,53 @@ describe('Text tool tag rendering', () => {
     expect(toolCalls[1]).toHaveAttribute('data-name', 'search_knowledge_base');
     expect(toolCalls[1]).toHaveAttribute('data-output', 'result-two');
     expect(toolCalls[1]).toHaveAttribute('data-state', 'active');
+  });
+
+  test('renders all tool cards when result content has unbalanced fenced code blocks', () => {
+    // Simulate truncated knowledge base results where a fenced code block
+    // opens but never closes before </tool>, causing the backtick regex
+    // to span across tool boundaries if not handled.
+    const content = [
+      toolStart(1, 'search(query=one)'),
+      toolStart(2, 'search(query=two)'),
+      toolStart(3, 'search(query=three)'),
+      toolDone(1, 'search(query=one)', 'result with ```python\ncode block``` end'),
+      toolDone(2, 'search(query=two)', 'truncated ```python\nimport foo\nfrom bar impo...'),
+      toolDone(3, 'search(query=three)', 'docs ```{toctree}\npage one\npage two\n``` end'),
+    ].join('\n\n');
+
+    mockUseMessageContext.mockReturnValue({ isSubmitting: false, isLatestMessage: true } as any);
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCalls = screen.getAllByTestId('tool-call');
+    expect(toolCalls).toHaveLength(3);
+    expect(toolCalls[0]).toHaveAttribute('data-state', 'active');
+    expect(toolCalls[1]).toHaveAttribute('data-state', 'active');
+    expect(toolCalls[2]).toHaveAttribute('data-state', 'active');
+  });
+
+  test('keeps balanced fenced code with literal </tool> inside tool output', () => {
+    const content = [
+      toolDone(
+        1,
+        'search(query=one)',
+        ['xml example', '```xml', '</tool>', '<tag>ok</tag>', '```', 'tail'].join('\n'),
+      ),
+      toolDone(2, 'search(query=two)', 'result-two'),
+    ].join('\n\n');
+
+    mockUseMessageContext.mockReturnValue({ isSubmitting: false, isLatestMessage: true } as any);
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCalls = screen.getAllByTestId('tool-call');
+    expect(toolCalls).toHaveLength(2);
+
+    const firstOutput = toolCalls[0].getAttribute('data-output') ?? '';
+    expect(firstOutput).toContain('```xml');
+    expect(firstOutput).toContain('</tool>');
+    expect(firstOutput).toContain('<tag>ok</tag>');
+    expect(firstOutput).toContain('tail');
+
+    expect(toolCalls[1]).toHaveAttribute('data-output', 'result-two');
   });
 });
