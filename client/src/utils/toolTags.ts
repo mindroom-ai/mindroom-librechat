@@ -85,11 +85,19 @@ const maskCodeBlocks = (text: string): string => {
     // Don't mask "code blocks" that started inside a tool result.
     // Unbalanced backticks in tool content (e.g., truncated text ending with
     // ```python ...) cause the code-block regex to match across </tool> into
-    // the next <tool>, hiding those tags from the tool-tag parser.
-    // If the opening backticks start inside a tool result and the same
-    // regex match crosses a real </tool> boundary into a following <tool ...>,
-    // this is not a real markdown block in assistant text and should stay
-    // unmasked so the parser can still see tool tags.
+    // following text, hiding the closing tag from the tool-tag parser.
+    //
+    // Two scenarios where the match contains </tool>:
+    //   1. Truncated code block: opening ``` has no closing ``` within the
+    //      tool result, so the regex matches across the real </tool> into
+    //      assistant text. We must NOT mask — the </tool> is a real boundary.
+    //   2. Balanced code block with literal </tool>: the ``` pair is inside
+    //      the tool result and </tool> is just code content. The real closing
+    //      tag is after the code block. We SHOULD mask it.
+    //
+    // We distinguish them by checking whether a </tool> exists after the
+    // match (before the next <tool>). If so, the one inside is literal (case
+    // 2). If not, it's the real closing tag (case 1).
     if (!isInsideToolResult(text, startIndex)) {
       return ' '.repeat(match.length);
     }
@@ -101,10 +109,27 @@ const maskCodeBlocks = (text: string): string => {
 
     const openIdx = match.search(TOOL_OPEN_SEARCH_PATTERN);
     if (openIdx !== -1 && closeIdx < openIdx) {
+      // Case 3: match spans across </tool> and into a following <tool>.
+      // Not a real code block — don't mask.
       return match;
     }
 
-    return ' '.repeat(match.length);
+    // Check whether the tool result has a real </tool> after this match.
+    // If it does, the </tool> inside the match is literal content (case 2)
+    // and we should mask the code block. If it doesn't, the </tool> in the
+    // match is the real closing tag (case 1) and we must not mask it.
+    const afterMatch = text.slice(startIndex + match.length);
+    const nextClose = afterMatch.indexOf('</tool>');
+    const nextOpen = afterMatch.search(TOOL_OPEN_SEARCH_PATTERN);
+    const hasClosingAfter = nextClose !== -1 && (nextOpen === -1 || nextClose < nextOpen);
+    if (hasClosingAfter) {
+      // Literal </tool> inside a balanced code block — mask it.
+      return ' '.repeat(match.length);
+    }
+
+    // No real </tool> after the match — the one in the match is the real
+    // closing tag and must stay visible.
+    return match;
   };
   const maskedFences = text.replace(FENCED_CODE_PATTERN, (match, offset: number) =>
     mask(match, offset),
