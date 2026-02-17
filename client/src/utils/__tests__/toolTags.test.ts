@@ -394,6 +394,67 @@ describe('parseToolTags', () => {
     ]);
   });
 
+  test('parses tool when truncated code block spans across </tool> into assistant text', () => {
+    // Unbalanced ``` inside tool result — no closing ``` before </tool>.
+    // The fenced-code regex matches from that ``` across </tool> to the
+    // closing ``` in the assistant text.  The fix must not mask </tool>.
+    const input = [
+      '<tool id="1" state="done">search(query=test)',
+      'Result: ```python\nimport foo\nfrom bar impo…</tool>',
+      '',
+      'Here is the answer:',
+      '',
+      '```python',
+      'print("hello")',
+      '```',
+    ].join('\n');
+
+    const segments = parseToolTags(input);
+    const tools = segments.filter((s) => s.type === 'tool');
+    expect(tools).toHaveLength(1);
+    expect(tools[0]).toMatchObject({
+      type: 'tool',
+      id: '1',
+      state: 'done',
+      call: 'search(query=test)',
+    });
+    // The result should contain the truncated code content
+    expect(tools[0].result).toContain('```python');
+    expect(tools[0].result).toContain('import foo');
+
+    const texts = segments.filter((s) => s.type === 'text');
+    // The assistant text after </tool> should be preserved
+    expect(texts.some((t) => t.text.includes('Here is the answer'))).toBe(true);
+  });
+
+  test('parses tool when truncated code block is followed by another tool then assistant code', () => {
+    // Truncated ``` in tool 1, followed by tool 2, then assistant code block.
+    // The fenced-code regex match spans across </tool> and <tool>, hitting
+    // the existing openIdx check.  Verify both tools parse correctly.
+    const input = [
+      '<tool id="1" state="done">search(query=one)',
+      'Result: ```python\nimport foo…</tool>',
+      '',
+      '<tool id="2" state="done">search(query=two)',
+      'result-two</tool>',
+      '',
+      'Summary:',
+      '',
+      '```python',
+      'print("done")',
+      '```',
+    ].join('\n');
+
+    const segments = parseToolTags(input);
+    const tools = segments.filter((s) => s.type === 'tool');
+    expect(tools).toHaveLength(2);
+    expect(tools[0]).toMatchObject({ id: '1', call: 'search(query=one)' });
+    expect(tools[1]).toMatchObject({ id: '2', call: 'search(query=two)', result: 'result-two' });
+
+    const texts = segments.filter((s) => s.type === 'text');
+    expect(texts.some((t) => t.text.includes('Summary'))).toBe(true);
+  });
+
   test('keeps unmatched start tool calls', () => {
     const segments = parseToolTags(
       [

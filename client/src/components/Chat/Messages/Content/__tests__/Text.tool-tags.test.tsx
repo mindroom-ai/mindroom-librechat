@@ -498,8 +498,14 @@ describe('Text tool tag rendering', () => {
     expect(toolCalls[0]).toHaveAttribute('data-name', 'search');
     expect(toolCalls[0]).toHaveAttribute('data-state', 'active');
 
+    const output = toolCalls[0].getAttribute('data-output') ?? '';
+    expect(output).toContain('```python');
+    expect(output).toContain('import foo');
+
     const markdownBlocks = screen.getAllByTestId('markdown');
     expect(markdownBlocks.length).toBeGreaterThanOrEqual(1);
+    // The assistant text after </tool> must not be swallowed
+    expect(markdownBlocks.some((el) => el.textContent?.includes('Here is the answer'))).toBe(true);
   });
 
   test('keeps balanced fenced code with literal </tool> inside tool output', () => {
