@@ -12,6 +12,7 @@
 Main commits in this repo:
 - `2ff285cbd` Render inline `<tool>/<tool-group>` markup as ToolCall UI cards ([PR #1](https://github.com/mindroom-ai/mindroom-librechat/pull/1))
 - `ce8db230f` fix(tool-tags): anchor merged tool cards at start position ([PR #17](https://github.com/mindroom-ai/mindroom-librechat/pull/17))
+- `837bd7a66` fix(tool-tags): handle code-fence masking across tool boundaries without truncating valid tool output ([PR #23](https://github.com/mindroom-ai/mindroom-librechat/pull/23))
 
 ## Why this feature exists
 
@@ -33,6 +34,9 @@ Frontend (`mindroom-librechat`) evolution:
 2. Duplicate pending/completed workaround PRs ([PR #12](https://github.com/mindroom-ai/mindroom-librechat/pull/12), [PR #14](https://github.com/mindroom-ai/mindroom-librechat/pull/14)) handled transitional backend output but were interim logic.
 3. Strict `id/state` parsing and `id`-based collapse landed in [PR #15](https://github.com/mindroom-ai/mindroom-librechat/pull/15), replacing old-format fallback behavior.
 4. Anchor-at-start behavior landed in [PR #17](https://github.com/mindroom-ai/mindroom-librechat/pull/17) to prevent dropdown movement when `done` arrives later.
+5. Code-block masking robustness landed in [PR #23](https://github.com/mindroom-ai/mindroom-librechat/pull/23):
+   - preserve parsing of subsequent tool tags when a tool result contains unbalanced fenced code
+   - keep balanced fenced/inline code inside tool output masked, including literal `</tool>` text, to avoid premature tool closure
 
 Note:
 - Fork history was later cleaned via squash/rebase, so many intermediate attempts are represented primarily by PR history rather than many commits on `main`.
