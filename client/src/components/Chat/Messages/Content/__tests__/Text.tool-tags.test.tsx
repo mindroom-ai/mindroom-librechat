@@ -474,6 +474,34 @@ describe('Text tool tag rendering', () => {
     expect(toolCalls[2]).toHaveAttribute('data-state', 'active');
   });
 
+  test('renders tool card when truncated code block spans into trailing assistant text', () => {
+    // Tool result ends with unbalanced ```python (no closing ```).
+    // The fenced-code regex matches from that opening ``` across </tool>
+    // into the assistant text's own ```, masking the closing tag.
+    // The fix must preserve the </tool> even when no following <tool> exists.
+    const content = [
+      '<tool id="1" state="done">search(query=test)',
+      'Result: ```python\nimport foo\nfrom bar impo…</tool>',
+      '',
+      'Here is the answer:',
+      '',
+      '```python',
+      'print("hello")',
+      '```',
+    ].join('\n');
+
+    mockUseMessageContext.mockReturnValue({ isSubmitting: false, isLatestMessage: true } as any);
+    render(<Text text={content} isCreatedByUser={false} showCursor={false} />);
+
+    const toolCalls = screen.getAllByTestId('tool-call');
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0]).toHaveAttribute('data-name', 'search');
+    expect(toolCalls[0]).toHaveAttribute('data-state', 'active');
+
+    const markdownBlocks = screen.getAllByTestId('markdown');
+    expect(markdownBlocks.length).toBeGreaterThanOrEqual(1);
+  });
+
   test('keeps balanced fenced code with literal </tool> inside tool output', () => {
     const content = [
       toolDone(
