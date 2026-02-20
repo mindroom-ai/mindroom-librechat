@@ -51,6 +51,11 @@ describe('useProviderIcon', () => {
     expect(run('Totally Unknown')).toEqual({ provider: null, imageURL: null });
   });
 
+  /** Conversations saved before the provider registry persisted brand keys as iconURL. */
+  it('resolves a persisted mindroom iconURL key to the MindRoom brand', () => {
+    expect(run('MindRoom', 'mindroom')).toEqual({ provider: ProviderId.mindroom, imageURL: null });
+  });
+
   it('entity endpoints resolve to no provider, so avatars win', () => {
     expect(run(EModelEndpoint.agents)).toEqual({ provider: null, imageURL: null });
   });

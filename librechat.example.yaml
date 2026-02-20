@@ -907,6 +907,15 @@ endpoints:
   #     #     deploymentName: claude-3-5-haiku@20241022  # Override for this model
 
   custom:
+    # Custom endpoint logo behavior:
+    # - If `iconURL` is omitted, the logo is inferred from the endpoint's `baseURL` host,
+    #   `provider`, or name (for example: OpenAI, ChatGPT, Claude, OpenRouter, Groq, MindRoom).
+    #   Names that contain a known provider as a word also match (e.g. 'MindRoom Claude').
+    # - `iconURL` accepts:
+    #   1) Full URL (https://...)
+    #   2) Local path (/images/logo.png or assets/logo.svg)
+    #   3) Built-in key/alias (openAI/openai, anthropic/claude, groq, openrouter, mindroom, ...)
+
     # xAI: Grok 4.7 uses the existing OpenAI-compatible chat and agent paths.
     # https://docs.x.ai/developers/grok-4-7
     # Set XAI_API_KEY in your environment. No separate SpaceXAI provider is needed.

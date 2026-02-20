@@ -29,6 +29,7 @@ export enum ProviderId {
   together = 'together',
   unify = 'unify',
   vercel = 'vercel',
+  mindroom = 'mindroom',
 }
 
 export const endpointToProvider: Partial<Record<EModelEndpoint, ProviderId>> = {
@@ -67,11 +68,13 @@ const providerAliases: Record<string, ProviderId> = {
   gpt: ProviderId.openai,
   azureopenai: ProviderId.azure,
   claude: ProviderId.anthropic,
+  claudeai: ProviderId.anthropic,
   gemini: ProviderId.google,
   gemma: ProviderId.google,
   vertex: ProviderId.google,
   vertexai: ProviderId.google,
   palm: ProviderId.google,
+  palm2: ProviderId.google,
   awsbedrock: ProviderId.bedrock,
   grok: ProviderId.xai,
   kimi: ProviderId.moonshot,

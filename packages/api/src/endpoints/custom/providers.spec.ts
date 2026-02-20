@@ -106,13 +106,14 @@ describe('resolveEndpointProviderId', () => {
 
   it('carries a host for every provider that one can identify', () => {
     /** Host-unresolvable by nature: bedrock is region-scoped under a shared AWS suffix,
-     *  and Lemonade, MLX and Ollama run on operator-defined hosts. Anything else added
-     *  to ProviderId without a host silently falls through to the generic mark. */
+     *  and Lemonade, MLX, Ollama and MindRoom run on operator-defined hosts. Anything else
+     *  added to ProviderId without a host silently falls through to the generic mark. */
     const hostUnresolvable: ProviderId[] = [
       ProviderId.bedrock,
       ProviderId.lemonade,
       ProviderId.mlx,
       ProviderId.ollama,
+      ProviderId.mindroom,
     ];
     const covered = new Set(providerHosts.map(([, provider]) => provider));
 

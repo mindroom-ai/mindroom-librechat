@@ -1,4 +1,4 @@
-import { AuthType, EModelEndpoint } from 'librechat-data-provider';
+import { AuthType, EModelEndpoint, ProviderId } from 'librechat-data-provider';
 import type { TCustomEndpoints } from 'librechat-data-provider';
 import { loadCustomEndpointsConfig } from './config';
 
@@ -81,5 +81,82 @@ describe('loadCustomEndpointsConfig – user credential prompts', () => {
         userProvideURL: false,
       }),
     );
+  });
+});
+
+describe('loadCustomEndpointsConfig – endpoint logos', () => {
+  const baseEndpoint = {
+    apiKey: 'test-key',
+    baseURL: 'https://example.com/v1',
+    models: {
+      default: ['model-a'],
+      fetch: false,
+    },
+  };
+
+  it('brands endpoints whose name contains a provider word', () => {
+    const input: TCustomEndpoints = [
+      { ...baseEndpoint, name: 'Claude Gateway' },
+      { ...baseEndpoint, name: 'MindRoom-Dev' },
+    ];
+
+    const result = loadCustomEndpointsConfig(input);
+
+    expect(result?.['Claude Gateway']).toEqual(
+      expect.objectContaining({
+        type: EModelEndpoint.custom,
+        providerId: ProviderId.anthropic,
+      }),
+    );
+    expect(result?.['Claude Gateway']?.iconURL).toBeUndefined();
+    expect(result?.['MindRoom-Dev']?.providerId).toBe(ProviderId.mindroom);
+  });
+
+  it('resolves iconURL provider aliases', () => {
+    const input: TCustomEndpoints = [
+      { ...baseEndpoint, name: 'My Mirror', iconURL: 'openai' },
+      { ...baseEndpoint, name: 'Legacy PaLM', iconURL: 'palm2' },
+      { ...baseEndpoint, name: 'Claude.ai' },
+    ];
+
+    const result = loadCustomEndpointsConfig(input);
+
+    expect(result?.['My Mirror']?.providerId).toBe(ProviderId.openai);
+    expect(result?.['Legacy PaLM']?.providerId).toBe(ProviderId.google);
+    expect(result?.['Claude.ai']?.providerId).toBe(ProviderId.anthropic);
+  });
+
+  it('preserves explicit custom icon URLs', () => {
+    const input: TCustomEndpoints = [
+      {
+        ...baseEndpoint,
+        name: 'Custom Endpoint',
+        iconURL: 'https://cdn.example.com/custom-logo.png',
+      },
+    ];
+
+    const result = loadCustomEndpointsConfig(input);
+
+    expect(result?.['Custom Endpoint']?.iconURL).toBe('https://cdn.example.com/custom-logo.png');
+  });
+
+  it('maps MindRoom and Agents endpoint names to the MindRoom brand', () => {
+    const input: TCustomEndpoints = [
+      { ...baseEndpoint, name: 'MindRoom' },
+      { ...baseEndpoint, name: 'Agents' },
+    ];
+
+    const result = loadCustomEndpointsConfig(input);
+
+    expect(result?.MindRoom?.providerId).toBe(ProviderId.mindroom);
+    expect(result?.Agents?.providerId).toBe(ProviderId.mindroom);
+  });
+
+  it('leaves endpoints without a provider word unbranded', () => {
+    const input: TCustomEndpoints = [{ ...baseEndpoint, name: 'Internal Gateway' }];
+
+    const result = loadCustomEndpointsConfig(input);
+
+    expect(result?.['Internal Gateway']?.providerId).toBeUndefined();
   });
 });
