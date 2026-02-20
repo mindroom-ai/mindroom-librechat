@@ -327,6 +327,14 @@ endpoints:
   #     #     deploymentName: claude-3-5-haiku@20241022  # Override for this model
 
   custom:
+    # Custom endpoint logo behavior:
+    # - If `iconURL` is omitted, known endpoint names can auto-map to built-in logos
+    #   (for example: OpenAI, ChatGPT, Anthropic, Claude, OpenRouter, Groq, Mindroom, etc.).
+    # - `iconURL` accepts:
+    #   1) Full URL (https://...)
+    #   2) Local path (/images/logo.png or assets/logo.svg)
+    #   3) Built-in key/alias (openAI/openai, anthropic/claude, groq, openrouter, ...)
+
     # Groq Example
     - name: 'groq'
       apiKey: '${GROQ_API_KEY}'

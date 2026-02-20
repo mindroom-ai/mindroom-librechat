@@ -8,6 +8,8 @@ import {
   isAgentsEndpoint,
   isEphemeralAgentId,
   isAssistantsEndpoint,
+  normalizeIconURL,
+  resolveEndpointIconKey,
 } from 'librechat-data-provider';
 import type * as t from 'librechat-data-provider';
 import type { LocalizeFunction, IconsRecord } from '~/common';
@@ -308,10 +310,18 @@ export function getIconKey({
   endpointIconURL?: string;
 }): keyof IconsRecord {
   const endpointType = _eType ?? getEndpointField(endpointsConfig, endpoint, 'type') ?? '';
-  const endpointIconURL = iconURL ?? getEndpointField(endpointsConfig, endpoint, 'iconURL') ?? '';
+  const endpointIconURL = normalizeIconURL(
+    iconURL ?? getEndpointField(endpointsConfig, endpoint, 'iconURL') ?? '',
+  );
   if (endpointIconURL && EModelEndpoint[endpointIconURL] != null) {
     return endpointIconURL;
   }
+
+  const endpointAlias = resolveEndpointIconKey(endpoint ?? '', { allowTokenMatch: true });
+  if (endpointAlias && EModelEndpoint[endpointAlias] != null) {
+    return endpointAlias;
+  }
+
   return endpointType ? 'unknown' : (endpoint ?? 'unknown');
 }
 

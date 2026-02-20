@@ -1,3 +1,5 @@
+import { EModelEndpoint } from './schemas';
+
 export const envVarRegex = /^\${(.+)}$/;
 
 /** Extracts the environment variable name from a template literal string */
@@ -59,4 +61,97 @@ export function extractEnvVariable(value: string) {
  */
 export function normalizeEndpointName(name = ''): string {
   return name.toLowerCase() === 'ollama' ? 'ollama' : name;
+}
+
+const endpointIconAliases: Record<string, string> = {
+  openai: EModelEndpoint.openAI,
+  chatgpt: EModelEndpoint.openAI,
+  gpt: EModelEndpoint.openAI,
+  anthropic: EModelEndpoint.anthropic,
+  claude: EModelEndpoint.anthropic,
+  claudeai: EModelEndpoint.anthropic,
+  google: EModelEndpoint.google,
+  gemini: EModelEndpoint.google,
+  palm: EModelEndpoint.google,
+  palm2: EModelEndpoint.google,
+  azureopenai: EModelEndpoint.azureOpenAI,
+  bedrock: EModelEndpoint.bedrock,
+  awsbedrock: EModelEndpoint.bedrock,
+  anyscale: 'anyscale',
+  apipie: 'apipie',
+  cohere: 'cohere',
+  deepseek: 'deepseek',
+  fireworks: 'fireworks',
+  groq: 'groq',
+  helicone: 'helicone',
+  huggingface: 'huggingface',
+  mistral: 'mistral',
+  mlx: 'mlx',
+  ollama: 'ollama',
+  openrouter: 'openrouter',
+  perplexity: 'perplexity',
+  qwen: 'qwen',
+  shuttleai: 'shuttleai',
+  togetherai: 'together.ai',
+  unify: 'unify',
+  vercel: 'vercel',
+  mindroom: 'mindroom',
+  xai: 'xai',
+  moonshot: 'moonshot',
+};
+
+export const normalizeEndpointIconAliasKey = (value = ''): string => {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '');
+};
+
+/**
+ * Resolves endpoint/provider names to a canonical icon key.
+ *
+ * Example: `Claude` => `anthropic`, `OpenAI` => `openAI`, `together.ai` => `together.ai`
+ */
+export function resolveEndpointIconKey(
+  value = '',
+  options: {
+    allowTokenMatch?: boolean;
+  } = {},
+): string | undefined {
+  if (!value) {
+    return;
+  }
+
+  const key = normalizeEndpointIconAliasKey(value);
+  if (key.length === 0) {
+    return;
+  }
+
+  const directMatch = endpointIconAliases[key];
+  if (directMatch) {
+    return directMatch;
+  }
+
+  if (!options.allowTokenMatch) {
+    return;
+  }
+
+  const parts = value.split(/[^a-z0-9.]+/gi).filter(Boolean);
+  for (const part of parts) {
+    const token = normalizeEndpointIconAliasKey(part);
+    const tokenMatch = endpointIconAliases[token];
+    if (tokenMatch) {
+      return tokenMatch;
+    }
+  }
+}
+
+/**
+ * Normalizes iconURL aliases (e.g. "openai", "claude") to canonical icon keys.
+ * Keeps URLs/paths unchanged.
+ */
+export function normalizeIconURL(iconURL?: string | null): string {
+  const value = iconURL?.trim() ?? '';
+  if (!value) {
+    return '';
+  }
+
+  return resolveEndpointIconKey(value) ?? value;
 }
