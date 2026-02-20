@@ -1,6 +1,12 @@
 import { memo } from 'react';
 import { Feather } from 'lucide-react';
-import { EModelEndpoint, isAssistantsEndpoint, alternateName } from 'librechat-data-provider';
+import {
+  EModelEndpoint,
+  isAssistantsEndpoint,
+  alternateName,
+  normalizeIconURL,
+  resolveEndpointIconKey,
+} from 'librechat-data-provider';
 import {
   Plugin,
   GPTIcon,
@@ -58,9 +64,12 @@ function getGoogleModelName(model: string | null | undefined) {
 
 const MessageEndpointIcon: React.FC<IconProps> = (props) => {
   const { error, iconURL = '', endpoint, size = 30, model = '', assistantName, agentName } = props;
+  const normalizedIconURL = normalizeIconURL(iconURL);
+  const resolvedEndpoint =
+    resolveEndpointIconKey(endpoint ?? '', { allowTokenMatch: true }) ?? endpoint;
 
   const assistantsIcon = {
-    icon: iconURL ? (
+    icon: normalizedIconURL ? (
       <div className="relative flex h-6 w-6 items-center justify-center">
         <div
           title={assistantName}
@@ -72,7 +81,7 @@ const MessageEndpointIcon: React.FC<IconProps> = (props) => {
         >
           <img
             className="shadow-stroke h-full w-full object-cover"
-            src={iconURL}
+            src={normalizedIconURL}
             alt={assistantName}
             style={{ height: '80', width: '80' }}
           />
@@ -89,7 +98,7 @@ const MessageEndpointIcon: React.FC<IconProps> = (props) => {
   };
 
   const agentsIcon = {
-    icon: iconURL ? (
+    icon: normalizedIconURL ? (
       <div className="relative flex h-6 w-6 items-center justify-center">
         <div
           title={agentName}
@@ -101,7 +110,7 @@ const MessageEndpointIcon: React.FC<IconProps> = (props) => {
         >
           <img
             className="shadow-stroke h-full w-full object-cover"
-            src={iconURL}
+            src={normalizedIconURL}
             alt={agentName}
             style={{ height: '80', width: '80' }}
           />
@@ -157,8 +166,8 @@ const MessageEndpointIcon: React.FC<IconProps> = (props) => {
         <div className="h-6 w-6">
           <div className="overflow-hidden rounded-full">
             <UnknownIcon
-              iconURL={iconURL}
-              endpoint={endpoint ?? ''}
+              iconURL={normalizedIconURL}
+              endpoint={resolvedEndpoint ?? ''}
               className="h-full w-full object-contain"
               context="message"
             />
@@ -170,15 +179,15 @@ const MessageEndpointIcon: React.FC<IconProps> = (props) => {
   };
 
   let { icon, bg, name } =
-    endpoint != null && endpoint && endpointIcons[endpoint]
-      ? (endpointIcons[endpoint] ?? {})
+    resolvedEndpoint != null && resolvedEndpoint && endpointIcons[resolvedEndpoint]
+      ? (endpointIcons[resolvedEndpoint] ?? {})
       : (endpointIcons.default as EndpointIcon);
 
-  if (iconURL && endpointIcons[iconURL]) {
-    ({ icon, bg, name } = endpointIcons[iconURL]);
+  if (normalizedIconURL && endpointIcons[normalizedIconURL]) {
+    ({ icon, bg, name } = endpointIcons[normalizedIconURL]);
   }
 
-  if (isAssistantsEndpoint(endpoint)) {
+  if (isAssistantsEndpoint(resolvedEndpoint)) {
     return icon;
   }
 

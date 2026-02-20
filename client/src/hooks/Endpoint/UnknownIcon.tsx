@@ -1,6 +1,11 @@
 import { memo } from 'react';
-import { EModelEndpoint, KnownEndpoints } from 'librechat-data-provider';
-import { CustomMinimalIcon, XAIcon, MoonshotIcon } from '@librechat/client';
+import {
+  EModelEndpoint,
+  KnownEndpoints,
+  normalizeIconURL,
+  resolveEndpointIconKey,
+} from 'librechat-data-provider';
+import { CustomMinimalIcon, XAIcon, MoonshotIcon, AnthropicIcon } from '@librechat/client';
 import { IconContext } from '~/common';
 import { cn } from '~/utils';
 
@@ -24,12 +29,32 @@ const knownEndpointAssets = {
   [KnownEndpoints.shuttleai]: 'assets/shuttleai.png',
   [KnownEndpoints['together.ai']]: 'assets/together.png',
   [KnownEndpoints.unify]: 'assets/unify.webp',
+  mindroom: 'assets/mindroom-logo.svg',
 };
 
 const knownEndpointClasses = {
   [KnownEndpoints.cohere]: {
     [IconContext.landing]: 'p-2',
   },
+};
+
+const isDirectImageSource = (value = ''): boolean => {
+  const source = value.trim().toLowerCase();
+  return (
+    source.startsWith('http://') ||
+    source.startsWith('https://') ||
+    source.startsWith('/') ||
+    source.startsWith('assets/') ||
+    source.startsWith('data:image/') ||
+    source.startsWith('blob:')
+  );
+};
+
+const getLookupKey = (value = '') => {
+  if (value === EModelEndpoint.openAI) {
+    return KnownEndpoints.openai;
+  }
+  return value.toLowerCase();
 };
 
 const getKnownClass = ({
@@ -63,22 +88,49 @@ function UnknownIcon({
   context?: 'landing' | 'menu-item' | 'nav' | 'message';
 }) {
   const endpoint = _endpoint ?? '';
-  if (!endpoint) {
+  const normalizedIconURL = normalizeIconURL(iconURL);
+  const endpointAlias = resolveEndpointIconKey(endpoint, { allowTokenMatch: true }) ?? endpoint;
+  const iconAlias = resolveEndpointIconKey(normalizedIconURL) ?? normalizedIconURL;
+  const currentEndpoint = getLookupKey(endpointAlias);
+  const currentIcon = getLookupKey(iconAlias);
+
+  if (!endpoint && !normalizedIconURL) {
     return <CustomMinimalIcon className={className} />;
   }
 
-  const currentEndpoint = endpoint.toLowerCase();
+  if (endpointAlias === EModelEndpoint.anthropic || iconAlias === EModelEndpoint.anthropic) {
+    return <AnthropicIcon className={cn(className, 'dark:text-white')} />;
+  }
 
-  if (currentEndpoint === KnownEndpoints.xai) {
+  if (currentEndpoint === KnownEndpoints.xai || currentIcon === KnownEndpoints.xai) {
     return <XAIcon className={cn(className, 'text-black dark:text-white')} />;
   }
 
-  if (currentEndpoint === KnownEndpoints.moonshot) {
+  if (currentEndpoint === KnownEndpoints.moonshot || currentIcon === KnownEndpoints.moonshot) {
     return <MoonshotIcon className={cn(className, 'text-black dark:text-white')} />;
   }
 
-  if (iconURL) {
-    return <img className={className} src={iconURL} alt={`${endpoint} Icon`} />;
+  if (normalizedIconURL) {
+    const mappedIconAsset = knownEndpointAssets[currentIcon] ?? '';
+    if (mappedIconAsset) {
+      return (
+        <img
+          className={getKnownClass({
+            currentEndpoint: currentIcon,
+            context: context,
+            className,
+          })}
+          src={mappedIconAsset}
+          alt={`${currentIcon} Icon`}
+        />
+      );
+    }
+
+    if (isDirectImageSource(normalizedIconURL)) {
+      return (
+        <img className={className} src={normalizedIconURL} alt={`${endpoint || iconAlias} Icon`} />
+      );
+    }
   }
 
   const assetPath: string = knownEndpointAssets[currentEndpoint] ?? '';
