@@ -1,6 +1,6 @@
 import { EModelEndpoint, getEndpointField } from 'librechat-data-provider';
 import type { TEndpointsConfig, TConfig } from 'librechat-data-provider';
-import { getAvailableEndpoints, getEndpointsFilter, mapEndpoints } from './endpoints';
+import { getAvailableEndpoints, getEndpointsFilter, mapEndpoints, getIconKey } from './endpoints';
 
 const mockEndpointsConfig: TEndpointsConfig = {
   [EModelEndpoint.openAI]: { type: undefined, iconURL: 'openAI_icon.png', order: 0 },
@@ -81,5 +81,36 @@ describe('mapEndpoints', () => {
   it('returns sorted available endpoints', () => {
     const expectedOrder = [EModelEndpoint.openAI, EModelEndpoint.google, 'Mistral'];
     expect(mapEndpoints(mockEndpointsConfig)).toEqual(expectedOrder);
+  });
+});
+
+describe('getIconKey', () => {
+  it('maps endpoint aliases to built-in endpoint icon keys', () => {
+    expect(
+      getIconKey({
+        endpoint: 'Claude',
+        endpointType: EModelEndpoint.custom,
+        endpointsConfig: mockEndpointsConfig,
+      }),
+    ).toBe(EModelEndpoint.anthropic);
+
+    expect(
+      getIconKey({
+        endpoint: 'OpenAI',
+        endpointType: EModelEndpoint.custom,
+        endpointsConfig: mockEndpointsConfig,
+      }),
+    ).toBe(EModelEndpoint.openAI);
+  });
+
+  it('maps iconURL aliases to built-in endpoint icon keys', () => {
+    expect(
+      getIconKey({
+        endpoint: 'My Gateway',
+        endpointType: EModelEndpoint.custom,
+        endpointsConfig: mockEndpointsConfig,
+        endpointIconURL: 'openai',
+      }),
+    ).toBe(EModelEndpoint.openAI);
   });
 });
