@@ -65,7 +65,8 @@ function getGoogleModelName(model: string | null | undefined) {
 const MessageEndpointIcon: React.FC<IconProps> = (props) => {
   const { error, iconURL = '', endpoint, size = 30, model = '', assistantName, agentName } = props;
   const normalizedIconURL = normalizeIconURL(iconURL);
-  const resolvedEndpoint = resolveEndpointIconKey(endpoint ?? '', { allowTokenMatch: true }) ?? endpoint;
+  const resolvedEndpoint =
+    resolveEndpointIconKey(endpoint ?? '', { allowTokenMatch: true }) ?? endpoint;
 
   const assistantsIcon = {
     icon: normalizedIconURL ? (

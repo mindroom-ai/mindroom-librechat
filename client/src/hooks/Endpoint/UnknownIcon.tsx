@@ -127,7 +127,9 @@ function UnknownIcon({
     }
 
     if (isDirectImageSource(normalizedIconURL)) {
-      return <img className={className} src={normalizedIconURL} alt={`${endpoint || iconAlias} Icon`} />;
+      return (
+        <img className={className} src={normalizedIconURL} alt={`${endpoint || iconAlias} Icon`} />
+      );
     }
   }
 
