@@ -1,4 +1,11 @@
-import { EModelEndpoint, extractEnvVariable, normalizeEndpointName } from 'librechat-data-provider';
+import {
+  EModelEndpoint,
+  extractEnvVariable,
+  normalizeEndpointName,
+  normalizeEndpointIconAliasKey,
+  normalizeIconURL,
+  resolveEndpointIconKey,
+} from 'librechat-data-provider';
 import type { TCustomEndpoints, TEndpoint } from 'librechat-data-provider';
 import type { TCustomEndpointsConfig } from '~/types/endpoints';
 import { isUserProvided } from '~/utils';
@@ -40,6 +47,11 @@ export function loadCustomEndpointsConfig(
 
       const resolvedApiKey = extractEnvVariable(apiKey ?? '');
       const resolvedBaseURL = extractEnvVariable(baseURL ?? '');
+      const normalizedIconURL = normalizeIconURL(iconURL);
+      const iconAliasKey = normalizeEndpointIconAliasKey(name);
+      const inferredIconURL =
+        resolveEndpointIconKey(name, { allowTokenMatch: true }) ||
+        (iconAliasKey === EModelEndpoint.agents ? 'mindroom' : undefined);
 
       customEndpointsConfig[name] = {
         type: EModelEndpoint.custom,
@@ -47,7 +59,7 @@ export function loadCustomEndpointsConfig(
         userProvideURL: isUserProvided(resolvedBaseURL),
         customParams,
         modelDisplayLabel,
-        iconURL,
+        iconURL: normalizedIconURL || inferredIconURL,
       };
     }
   }

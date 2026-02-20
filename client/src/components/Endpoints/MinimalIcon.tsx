@@ -1,5 +1,10 @@
 import { Feather } from 'lucide-react';
-import { EModelEndpoint, alternateName } from 'librechat-data-provider';
+import {
+  EModelEndpoint,
+  alternateName,
+  normalizeIconURL,
+  resolveEndpointIconKey,
+} from 'librechat-data-provider';
 import {
   Sparkles,
   BedrockIcon,
@@ -15,12 +20,15 @@ import { cn } from '~/utils';
 
 const MinimalIcon: React.FC<IconProps> = (props) => {
   const { size = 30, iconURL = '', iconClassName, error } = props;
+  const normalizedIconURL = normalizeIconURL(iconURL);
 
   let endpoint = 'default'; // Default value for endpoint
 
   if (typeof props.endpoint === 'string') {
     endpoint = props.endpoint;
   }
+
+  const resolvedEndpoint = resolveEndpointIconKey(endpoint, { allowTokenMatch: true }) ?? endpoint;
 
   const endpointIcons = {
     [EModelEndpoint.azureOpenAI]: {
@@ -51,14 +59,21 @@ const MinimalIcon: React.FC<IconProps> = (props) => {
       name: props.modelLabel ?? alternateName[EModelEndpoint.bedrock],
     },
     default: {
-      icon: <UnknownIcon iconURL={iconURL} endpoint={endpoint} className="icon-sm" context="nav" />,
+      icon: (
+        <UnknownIcon
+          iconURL={normalizedIconURL}
+          endpoint={endpoint}
+          className="icon-sm"
+          context="nav"
+        />
+      ),
       name: endpoint,
     },
   };
 
-  let { icon, name } = endpointIcons[endpoint] ?? endpointIcons.default;
-  if (iconURL && endpointIcons[iconURL] != null) {
-    ({ icon, name } = endpointIcons[iconURL]);
+  let { icon, name } = endpointIcons[resolvedEndpoint] ?? endpointIcons.default;
+  if (normalizedIconURL && endpointIcons[normalizedIconURL] != null) {
+    ({ icon, name } = endpointIcons[normalizedIconURL]);
   }
 
   return (
