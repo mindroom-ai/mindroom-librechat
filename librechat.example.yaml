@@ -226,7 +226,7 @@ actions:
 #       - -y
 #       - "@modelcontextprotocol/server-filesystem"
 #       - /home/user/LibreChat/
-#     iconPath: /home/user/LibreChat/client/public/assets/logo.svg
+#     iconPath: /home/user/LibreChat/client/public/assets/logo.png
 #   mcp-obsidian:
 #     command: npx
 #     args:
@@ -332,7 +332,7 @@ endpoints:
     #   (for example: OpenAI, ChatGPT, Anthropic, Claude, OpenRouter, Groq, Mindroom, etc.).
     # - `iconURL` accepts:
     #   1) Full URL (https://...)
-    #   2) Local path (/images/logo.png or assets/logo.svg)
+    #   2) Local path (/images/logo.png or assets/logo.png)
     #   3) Built-in key/alias (openAI/openai, anthropic/claude, groq, openrouter, ...)
 
     # Groq Example
