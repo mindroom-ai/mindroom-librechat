@@ -29,7 +29,7 @@ const knownEndpointAssets: Record<string, string> = {
   [KnownEndpoints.shuttleai]: 'assets/shuttleai.png',
   [KnownEndpoints['together.ai']]: 'assets/together.png',
   [KnownEndpoints.unify]: 'assets/unify.webp',
-  mindroom: 'assets/mindroom-logo.svg',
+  mindroom: 'assets/mindroom-logo.png',
 };
 
 const knownEndpointComponents = new Set<string>([KnownEndpoints.moonshot, KnownEndpoints.xai]);
