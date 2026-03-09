@@ -117,7 +117,7 @@ export const providerIcons: Record<ProviderId, ProviderIconDef> = {
     label: 'Vercel',
     mono: true,
   },
-  [ProviderId.mindroom]: { art: asset('assets/mindroom-logo.svg'), label: 'MindRoom' },
+  [ProviderId.mindroom]: { art: asset('assets/mindroom-logo.png'), label: 'MindRoom' },
 };
 
 /** Merges any model level refinement over the base definition for a provider. */
