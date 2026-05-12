@@ -70,9 +70,17 @@ jest.mock('~/utils', () => ({
   cn: (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' '),
 }));
 
-function dropFile(file: File) {
-  fireEvent.drop(screen.getByRole('button', { name: /drag and drop or click to upload/i }), {
-    dataTransfer: {
+function selectFile(file: File) {
+  const inputs = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[type="file"][accept=".zip,.skill,.md"]'),
+  );
+  const input = inputs.at(-1);
+  expect(input).toBeInTheDocument();
+  if (!input) {
+    throw new Error('file input not found');
+  }
+  fireEvent.change(input, {
+    target: {
       files: [file],
     },
   });
@@ -113,7 +121,7 @@ describe('UploadSkillDialog', () => {
       type: 'application/zip',
     });
 
-    dropFile(file);
+    selectFile(file);
 
     expect(mockMutate).not.toHaveBeenCalled();
     expect(mockShowToast).toHaveBeenCalledWith({
@@ -129,7 +137,7 @@ describe('UploadSkillDialog', () => {
       type: 'application/zip',
     });
 
-    dropFile(file);
+    selectFile(file);
 
     expect(mockShowToast).not.toHaveBeenCalled();
     expect(appendSpy).toHaveBeenCalledWith('file', file, file.name);
@@ -144,7 +152,7 @@ describe('UploadSkillDialog', () => {
       type: 'application/zip',
     });
 
-    dropFile(file);
+    selectFile(file);
 
     expect(mockShowToast).not.toHaveBeenCalled();
     expect(appendSpy).toHaveBeenCalledWith('file', file, file.name);
