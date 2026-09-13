@@ -1,5 +1,10 @@
 # MindRoom LibreChat Fork
 
+<picture>
+  <source media="(prefers-reduced-motion: no-preference)" srcset="https://raw.githubusercontent.com/mindroom-ai/mindroom/main/assets/logo/logo-mark-animated.svg" />
+  <img src="https://raw.githubusercontent.com/mindroom-ai/mindroom/main/assets/logo/logo-mark.svg" alt="MindRoom Logo" align="right" width="120" />
+</picture>
+
 This is [MindRoom's](https://github.com/mindroom-ai) fork of [LibreChat](https://github.com/danny-avila/LibreChat). We use LibreChat as the web UI for MindRoom's AI agent platform.
 
 ## Why this fork exists
