@@ -23,6 +23,7 @@ const {
   buildAgentContextAttachmentsByAgentId,
   createSafeUser,
   initializeAgent,
+  validateAgentModel,
   loadSkillStates,
   getBalanceConfig,
   injectSkillPrimes,
@@ -623,6 +624,37 @@ const executeResponse = async (envelope, { req, res }) => {
       `Agent not found: ${agentId}`,
       'not_found',
       'model_not_found',
+    );
+  }
+
+  /** Same model gate as the in-app chat: the executing user's role/group-filtered model list.
+   *  Checked before enrollment so a denied request leaves no execution record. */
+  let modelValidation;
+  try {
+    modelValidation = await validateAgentModel({
+      req,
+      res,
+      agent,
+      modelsConfig: await getModelsConfig(req),
+      logViolation,
+    });
+  } catch (error) {
+    logger.error('[Responses API] Failed to check the agent model:', getSafeErrorMetadata(error));
+    return sendResponsesErrorResponse(
+      res,
+      500,
+      'Unable to load the available models',
+      'server_error',
+      'models_unavailable',
+    );
+  }
+  if (!modelValidation.isValid) {
+    return sendResponsesErrorResponse(
+      res,
+      403,
+      `Agent ${agentId} uses a model that is not available to this user`,
+      'permission_error',
+      'model_not_allowed',
     );
   }
 

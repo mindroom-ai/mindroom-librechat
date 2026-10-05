@@ -252,6 +252,8 @@ jest.mock('@librechat/api', () => ({
   validateRequest: jest
     .fn()
     .mockReturnValue({ request: { model: 'agent-123', messages: [], stream: false } }),
+  /** Default allows; the model-restriction specs swap in the real implementation. */
+  validateAgentModel: jest.fn().mockResolvedValue({ isValid: true }),
   initializeAgent: jest.fn().mockResolvedValue({
     id: 'agent-123',
     model: 'gpt-4',
@@ -776,7 +778,8 @@ describe('OpenAIChatCompletionController', () => {
     );
 
     const request = OpenAIChatCompletionController(req, res);
-    await Promise.resolve();
+    /** Drain the pre-enrollment awaits (agent lookup, model gate) until enrollment is pending. */
+    await new Promise((resolve) => setImmediate(resolve));
     res.once.mock.calls[0][1]();
     finishEnrollment(mockExecution);
     await request;
@@ -934,6 +937,82 @@ describe('OpenAIChatCompletionController', () => {
       mockCompletionUsage,
       true,
     );
+  });
+
+  describe('role and group model restrictions', () => {
+    const agentOnModel = (model) => ({
+      id: 'agent-123',
+      name: 'Test Agent',
+      provider: 'openAI',
+      model,
+    });
+
+    /** The in-app chat validates the primary agent's model against the executing user's
+     *  role/group-filtered model list; the remote API must enforce the same list. */
+    it('rejects an agent whose model the user may not use, before initializing it', async () => {
+      const api = require('@librechat/api');
+      const db = require('~/models');
+      const { logViolation } = require('~/cache');
+      const { getModelsConfig } = require('~/server/controllers/ModelController');
+      api.validateAgentModel.mockImplementationOnce(
+        jest.requireActual('@librechat/api').validateAgentModel,
+      );
+      db.getAgent.mockResolvedValueOnce(agentOnModel('gpt-4o'));
+      getModelsConfig.mockResolvedValueOnce({ openAI: ['gpt-4o-mini'] });
+
+      await OpenAIChatCompletionController(req, res);
+
+      expect(getModelsConfig).toHaveBeenCalledWith(req);
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(api.createErrorResponse).toHaveBeenCalledWith(
+        expect.any(String),
+        'permission_error',
+        'model_not_allowed',
+      );
+      expect(logViolation).toHaveBeenCalledWith(
+        req,
+        res,
+        'illegal_model_request',
+        expect.objectContaining({ model: 'gpt-4o', endpoint: 'openAI' }),
+        expect.anything(),
+      );
+      expect(api.initializeAgent).not.toHaveBeenCalled();
+      expect(mockEnrollAgentExecution).not.toHaveBeenCalled();
+    });
+
+    it('answers a protocol error when the model catalog cannot load, before enrolling', async () => {
+      const api = require('@librechat/api');
+      const { getModelsConfig } = require('~/server/controllers/ModelController');
+      getModelsConfig.mockRejectedValueOnce(new Error('catalog unavailable: internal detail'));
+
+      await OpenAIChatCompletionController(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(api.createErrorResponse).toHaveBeenCalledWith(
+        expect.any(String),
+        'server_error',
+        'models_unavailable',
+      );
+      expect(JSON.stringify(api.createErrorResponse.mock.calls)).not.toContain('internal detail');
+      expect(api.initializeAgent).not.toHaveBeenCalled();
+      expect(mockEnrollAgentExecution).not.toHaveBeenCalled();
+    });
+
+    it('runs an agent whose model the user may use', async () => {
+      const api = require('@librechat/api');
+      const db = require('~/models');
+      const { getModelsConfig } = require('~/server/controllers/ModelController');
+      api.validateAgentModel.mockImplementationOnce(
+        jest.requireActual('@librechat/api').validateAgentModel,
+      );
+      db.getAgent.mockResolvedValueOnce(agentOnModel('gpt-4o-mini'));
+      getModelsConfig.mockResolvedValueOnce({ openAI: ['gpt-4o-mini'] });
+
+      await OpenAIChatCompletionController(req, res);
+
+      expect(res.status).not.toHaveBeenCalledWith(403);
+      expect(api.initializeAgent).toHaveBeenCalled();
+    });
   });
 
   describe('content filtering', () => {

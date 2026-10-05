@@ -62,6 +62,11 @@ jest.mock('~/server/services/Config', () => ({
   getMCPServerTools: jest.fn().mockReturnValue([]),
 }));
 
+/** The fixture agents' model, so the remote model gate admits them. */
+jest.mock('~/server/controllers/ModelController', () => ({
+  getModelsConfig: jest.fn().mockResolvedValue({ anthropic: ['claude-sonnet-4-5-20250929'] }),
+}));
+
 jest.mock('~/app/clients/tools', () => ({
   createOpenAIImageTools: jest.fn(() => []),
   createYouTubeTools: jest.fn(() => []),

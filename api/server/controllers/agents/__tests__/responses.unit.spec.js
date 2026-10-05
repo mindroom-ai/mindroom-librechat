@@ -282,6 +282,8 @@ jest.mock('@librechat/api', () => ({
     .mockImplementation(({ accessibleSkillIds }) => accessibleSkillIds),
   loadSkillStates: jest.fn().mockResolvedValue({ skillStates: {}, defaultActiveOnShare: false }),
   createSafeUser: jest.fn().mockReturnValue({ id: 'user-123' }),
+  /** Default allows; the model-restriction specs swap in the real implementation. */
+  validateAgentModel: jest.fn().mockResolvedValue({ isValid: true }),
   initializeAgent: jest.fn().mockResolvedValue({
     id: 'agent-123',
     model: 'claude-3',
@@ -801,7 +803,8 @@ describe('createResponse controller', () => {
     );
 
     const request = createResponse(req, res);
-    await Promise.resolve();
+    /** Drain the pre-enrollment awaits (agent lookup, model gate) until enrollment is pending. */
+    await new Promise((resolve) => setImmediate(resolve));
     res.once.mock.calls[0][1]();
     finishEnrollment(mockExecution);
     await request;
@@ -1046,6 +1049,92 @@ describe('createResponse controller', () => {
       }),
       { context: 'Responses API - save assistant response' },
     );
+  });
+
+  describe('role and group model restrictions', () => {
+    const agentOnModel = (model) => ({
+      id: 'agent-123',
+      name: 'Test Agent',
+      provider: 'anthropic',
+      model,
+    });
+
+    /** The in-app chat validates the primary agent's model against the executing user's
+     *  role/group-filtered model list; the remote API must enforce the same list. */
+    it('rejects an agent whose model the user may not use, before initializing it', async () => {
+      const api = require('@librechat/api');
+      const db = require('~/models');
+      const { logViolation } = require('~/cache');
+      const { getModelsConfig } = require('~/server/controllers/ModelController');
+      api.validateAgentModel.mockImplementationOnce(
+        jest.requireActual('@librechat/api').validateAgentModel,
+      );
+      db.getAgent.mockResolvedValueOnce(agentOnModel('claude-opus-5-5'));
+      getModelsConfig.mockResolvedValueOnce({ anthropic: ['claude-haiku-4-5'] });
+
+      await createResponse(req, res);
+
+      expect(getModelsConfig).toHaveBeenCalledWith(req);
+      expect(api.sendResponsesErrorResponse).toHaveBeenCalledWith(
+        res,
+        403,
+        expect.any(String),
+        'permission_error',
+        'model_not_allowed',
+      );
+      expect(logViolation).toHaveBeenCalledWith(
+        req,
+        res,
+        'illegal_model_request',
+        expect.objectContaining({ model: 'claude-opus-5-5', endpoint: 'anthropic' }),
+        expect.anything(),
+      );
+      expect(api.initializeAgent).not.toHaveBeenCalled();
+      expect(mockEnrollAgentExecution).not.toHaveBeenCalled();
+    });
+
+    it('answers a protocol error when the model catalog cannot load, before enrolling', async () => {
+      const api = require('@librechat/api');
+      const { getModelsConfig } = require('~/server/controllers/ModelController');
+      getModelsConfig.mockRejectedValueOnce(new Error('catalog unavailable: internal detail'));
+
+      await createResponse(req, res);
+
+      expect(api.sendResponsesErrorResponse).toHaveBeenCalledWith(
+        res,
+        500,
+        expect.any(String),
+        'server_error',
+        'models_unavailable',
+      );
+      expect(JSON.stringify(api.sendResponsesErrorResponse.mock.calls)).not.toContain(
+        'internal detail',
+      );
+      expect(api.initializeAgent).not.toHaveBeenCalled();
+      expect(mockEnrollAgentExecution).not.toHaveBeenCalled();
+    });
+
+    it('runs an agent whose model the user may use', async () => {
+      const api = require('@librechat/api');
+      const db = require('~/models');
+      const { getModelsConfig } = require('~/server/controllers/ModelController');
+      api.validateAgentModel.mockImplementationOnce(
+        jest.requireActual('@librechat/api').validateAgentModel,
+      );
+      db.getAgent.mockResolvedValueOnce(agentOnModel('claude-haiku-4-5'));
+      getModelsConfig.mockResolvedValueOnce({ anthropic: ['claude-haiku-4-5'] });
+
+      await createResponse(req, res);
+
+      expect(api.sendResponsesErrorResponse).not.toHaveBeenCalledWith(
+        res,
+        403,
+        expect.any(String),
+        'permission_error',
+        'model_not_allowed',
+      );
+      expect(api.initializeAgent).toHaveBeenCalled();
+    });
   });
 
   describe('execution envelope', () => {

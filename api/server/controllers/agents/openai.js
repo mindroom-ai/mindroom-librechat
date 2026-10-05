@@ -31,6 +31,7 @@ const {
   createSafeUser,
   validateRequest,
   initializeAgent,
+  validateAgentModel,
   getBalanceConfig,
   injectSkillPrimes,
   extractManualSkills,
@@ -378,6 +379,37 @@ const executeOpenAIChatCompletion = async (envelope, { req, res }) => {
       `Agent not found: ${agentId}`,
       'invalid_request_error',
       'model_not_found',
+    );
+  }
+
+  /** Same model gate as the in-app chat: the executing user's role/group-filtered model list.
+   *  Checked before enrollment so a denied request leaves no execution record. */
+  let modelValidation;
+  try {
+    modelValidation = await validateAgentModel({
+      req,
+      res,
+      agent,
+      modelsConfig: await getModelsConfig(req),
+      logViolation,
+    });
+  } catch (error) {
+    logger.error('[OpenAI API] Failed to check the agent model:', getSafeErrorMetadata(error));
+    return sendErrorResponse(
+      res,
+      500,
+      'Unable to load the available models',
+      'server_error',
+      'models_unavailable',
+    );
+  }
+  if (!modelValidation.isValid) {
+    return sendErrorResponse(
+      res,
+      403,
+      `Agent ${agentId} uses a model that is not available to this user`,
+      'permission_error',
+      'model_not_allowed',
     );
   }
 
