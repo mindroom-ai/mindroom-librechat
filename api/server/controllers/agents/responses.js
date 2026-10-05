@@ -629,13 +629,25 @@ const executeResponse = async (envelope, { req, res }) => {
 
   /** Same model gate as the in-app chat: the executing user's role/group-filtered model list.
    *  Checked before enrollment so a denied request leaves no execution record. */
-  const modelValidation = await validateAgentModel({
-    req,
-    res,
-    agent,
-    modelsConfig: await getModelsConfig(req),
-    logViolation,
-  });
+  let modelValidation;
+  try {
+    modelValidation = await validateAgentModel({
+      req,
+      res,
+      agent,
+      modelsConfig: await getModelsConfig(req),
+      logViolation,
+    });
+  } catch (error) {
+    logger.error('[Responses API] Failed to check the agent model:', getSafeErrorMetadata(error));
+    return sendResponsesErrorResponse(
+      res,
+      500,
+      'Unable to load the available models',
+      'server_error',
+      'models_unavailable',
+    );
+  }
   if (!modelValidation.isValid) {
     return sendResponsesErrorResponse(
       res,

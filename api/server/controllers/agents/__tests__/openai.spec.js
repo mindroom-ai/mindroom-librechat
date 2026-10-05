@@ -980,6 +980,24 @@ describe('OpenAIChatCompletionController', () => {
       expect(mockEnrollAgentExecution).not.toHaveBeenCalled();
     });
 
+    it('answers a protocol error when the model catalog cannot load, before enrolling', async () => {
+      const api = require('@librechat/api');
+      const { getModelsConfig } = require('~/server/controllers/ModelController');
+      getModelsConfig.mockRejectedValueOnce(new Error('catalog unavailable: internal detail'));
+
+      await OpenAIChatCompletionController(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(api.createErrorResponse).toHaveBeenCalledWith(
+        expect.any(String),
+        'server_error',
+        'models_unavailable',
+      );
+      expect(JSON.stringify(api.createErrorResponse.mock.calls)).not.toContain('internal detail');
+      expect(api.initializeAgent).not.toHaveBeenCalled();
+      expect(mockEnrollAgentExecution).not.toHaveBeenCalled();
+    });
+
     it('runs an agent whose model the user may use', async () => {
       const api = require('@librechat/api');
       const db = require('~/models');

@@ -1093,6 +1093,27 @@ describe('createResponse controller', () => {
       expect(mockEnrollAgentExecution).not.toHaveBeenCalled();
     });
 
+    it('answers a protocol error when the model catalog cannot load, before enrolling', async () => {
+      const api = require('@librechat/api');
+      const { getModelsConfig } = require('~/server/controllers/ModelController');
+      getModelsConfig.mockRejectedValueOnce(new Error('catalog unavailable: internal detail'));
+
+      await createResponse(req, res);
+
+      expect(api.sendResponsesErrorResponse).toHaveBeenCalledWith(
+        res,
+        500,
+        expect.any(String),
+        'server_error',
+        'models_unavailable',
+      );
+      expect(JSON.stringify(api.sendResponsesErrorResponse.mock.calls)).not.toContain(
+        'internal detail',
+      );
+      expect(api.initializeAgent).not.toHaveBeenCalled();
+      expect(mockEnrollAgentExecution).not.toHaveBeenCalled();
+    });
+
     it('runs an agent whose model the user may use', async () => {
       const api = require('@librechat/api');
       const db = require('~/models');
