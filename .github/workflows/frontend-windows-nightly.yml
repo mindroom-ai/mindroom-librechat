@@ -18,6 +18,8 @@ env:
 jobs:
   build:
     name: Build packages
+    # The schedule builds upstream's dev branch, which the fork does not have.
+    if: github.repository == 'LibreChat-AI/LibreChat' || github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
