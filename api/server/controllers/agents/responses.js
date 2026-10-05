@@ -23,6 +23,7 @@ const {
   buildAgentContextAttachmentsByAgentId,
   createSafeUser,
   initializeAgent,
+  validateAgentModel,
   loadSkillStates,
   getBalanceConfig,
   injectSkillPrimes,
@@ -688,6 +689,24 @@ const executeResponse = async (envelope, { req, res }) => {
       return handleExecutionError({ error, res, appConfig });
     },
     execute: async (execution) => {
+      /** Same model gate as the in-app chat: the executing user's role/group-filtered model list. */
+      const modelValidation = await validateAgentModel({
+        req,
+        res,
+        agent,
+        modelsConfig: await getModelsConfig(req),
+        logViolation,
+      });
+      if (!modelValidation.isValid) {
+        return sendResponsesErrorResponse(
+          res,
+          403,
+          `Agent ${agentId} uses a model that is not available to this user`,
+          'permission_error',
+          'model_not_allowed',
+        );
+      }
+
       if (request.previous_response_id != null) {
         if (typeof request.previous_response_id !== 'string') {
           return sendResponsesErrorResponse(

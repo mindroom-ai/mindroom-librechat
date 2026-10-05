@@ -103,6 +103,7 @@ librechat.yaml         (1) parsed by zod configSchema at startup
 
 - **Model selector**: Only allowed models appear in the dropdown (server returns filtered list).
 - **Submission**: `validateModel` middleware calls `getModelsConfig(req)` before processing a chat request. If the submitted model is not in the filtered list, the request is rejected with "Illegal model request". Since `getModelsConfig` already filters by role, enforcement is automatic.
+- **Agents**: an agent runs on its own `provider`/`model`, so the check is on the executing user, not the agent's author. In-app agent chat validates the primary agent (and handoff, added-convo and subagent agents) with `validateAgentModel` against `getModelsConfig(req)`. The remote agents API (`/api/agents/v1/chat/completions`, `/api/agents/v1/responses`) does the same for the primary agent (handoff/subagent agents are validated during discovery) and answers `403` `permission_error` / `model_not_allowed`. Creating or updating an agent does not check the model; it just cannot run for users whose list excludes it.
 
 ## Security
 
