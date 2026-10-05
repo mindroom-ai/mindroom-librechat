@@ -14,6 +14,8 @@ on:
 
 jobs:
   release:
+    # Upstream release publishing; the fork ships only its GHCR image (docker-build.yml).
+    if: github.repository == 'LibreChat-AI/LibreChat'
     permissions:
       contents: read
       packages: write

@@ -32,7 +32,8 @@ jobs:
 
   sync:
     name: Sync chart tags
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    # Upstream release publishing; the fork ships only its GHCR image (docker-build.yml).
+    if: github.repository == 'LibreChat-AI/LibreChat' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

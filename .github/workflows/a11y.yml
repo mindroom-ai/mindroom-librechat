@@ -23,9 +23,11 @@ concurrency:
 jobs:
   axe-linter:
     runs-on: ubuntu-latest
+    # Needs upstream's Deque AXE_LINTER_API_KEY, which the fork does not have.
     if: >
+      github.repository == 'LibreChat-AI/LibreChat' && (
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_workflow == 'true')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_workflow == 'true'))
     
     steps:
       - uses: actions/checkout@v5

@@ -14,6 +14,8 @@ jobs:
   # `latest` is only applied when this tag is both stable and the newest stable
   # tag in the repository, so re-cutting an older patch cannot move `latest`.
   resolve-tags:
+    # Upstream release publishing; the fork ships only its GHCR image (docker-build.yml).
+    if: github.repository == 'LibreChat-AI/LibreChat'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:

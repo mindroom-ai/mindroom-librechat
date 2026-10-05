@@ -17,6 +17,8 @@ Fork CI needed reliable image publishing and safer behavior in environments wher
 - Fixed workflow condition syntax and output-based gating.
 - Guarded upstream's `pr-retarget-dev.yml` to `LibreChat-AI/LibreChat`: fork PRs target `main` by design and the fork has no `dev` branch.
 - Guarded the scheduled run of upstream's `frontend-windows-nightly.yml` the same way: it checks out `dev`.
+- Guarded upstream's release publishing to `LibreChat-AI/LibreChat`: npm packages (`client.yml`, `data-provider.yml`, `data-schemas.yml`; the names belong to upstream and use its OIDC trusted publisher), Helm charts (`sync-helm-chart-tags.yml`, `helmcharts.yml`) and version-tag images (`tag-images.yml`). The fork's only automatic release artifact is the GHCR image from `docker-build.yml`; upstream's dispatch-only image workflows (`main-image-workflow.yml`, `dev-staging-images.yml`) stay available for deliberate manual runs.
+- Guarded upstream's `a11y.yml` axe linter: it needs upstream's paid Deque `AXE_LINTER_API_KEY`.
 
 Key files:
 - `.github/workflows/docker-build.yml`

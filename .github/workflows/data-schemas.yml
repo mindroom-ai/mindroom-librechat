@@ -18,6 +18,8 @@ permissions:
 
 jobs:
   pack:
+    # Upstream release publishing; the fork ships only its GHCR image (docker-build.yml).
+    if: github.repository == 'LibreChat-AI/LibreChat'
     runs-on: ubuntu-latest
     outputs:
       skip: ${{ steps.check.outputs.skip }}
