@@ -1,9 +1,7 @@
 import {
   AuthType,
-  CacheKeys,
   CODE_APPROVAL_MODES,
   EModelEndpoint,
-  Time,
   isAgentsEndpoint,
   orderEndpointsConfig,
   defaultAgentCapabilities,
@@ -19,46 +17,11 @@ import { getResponsesApiRouting } from './responses';
 type PartialEndpointEntry = Partial<TConfig> & Record<string, unknown>;
 type DefaultEndpointsResult = Record<string, PartialEndpointEntry | false | null>;
 type MutableEndpointsConfig = Record<string, PartialEndpointEntry | false | null | undefined>;
-type ConfigCache = {
-  get: (
-    key: string,
-  ) => Promise<TEndpointsConfig | ({ gptPlugins?: unknown } & TEndpointsConfig) | null>;
-  set: (key: string, value: TEndpointsConfig, expires?: number) => Promise<unknown>;
-  delete: (key: string) => Promise<unknown>;
-};
 
 export interface EndpointsConfigDeps {
   getAppConfig: (params: GetAppConfigOptions & { openidGroups?: string[] }) => Promise<AppConfig>;
   loadDefaultEndpointsConfig: (appConfig: AppConfig) => Promise<DefaultEndpointsResult>;
   loadCustomEndpointsConfig?: (custom: unknown) => TCustomEndpointsConfig | undefined;
-  getCache?: (cacheKey: string) => ConfigCache;
-}
-
-function getEndpointsCacheKey(params: {
-  role?: string;
-  userId?: string;
-  tenantId?: string;
-  openidGroups?: string[];
-}): string {
-  const { role, userId, tenantId, openidGroups } = params;
-  /** `userId` must be part of the key: app config can carry per-user DB overrides */
-  const parts: string[] = [];
-  if (tenantId) {
-    parts.push(`t:${tenantId}`);
-  }
-  if (userId) {
-    parts.push(`u:${userId}`);
-  }
-  if (openidGroups && openidGroups.length > 0) {
-    const groupsPart = JSON.stringify([...openidGroups].sort());
-    const rolePart = role || '_';
-    parts.push(`g:${rolePart}:${groupsPart}`);
-  } else if (role) {
-    parts.push(role);
-  }
-  return parts.length > 0
-    ? `${CacheKeys.ENDPOINT_CONFIG}:${parts.join(':')}`
-    : CacheKeys.ENDPOINT_CONFIG;
 }
 
 function applyEndpointRestrictions(
@@ -87,33 +50,21 @@ export function createEndpointsConfigService(deps: EndpointsConfigDeps): {
     getAppConfig,
     loadDefaultEndpointsConfig,
     loadCustomEndpointsConfig = defaultLoadCustomEndpoints,
-    getCache,
   } = deps;
 
   async function getEndpointsConfig(req: ServerRequest): Promise<TEndpointsConfig> {
     const openidGroups = req.user?.openidGroups;
     const appConfigOptions = { ...getAppConfigOptionsFromUser(req.user), openidGroups };
-    const { role, userId, tenantId } = appConfigOptions;
+    const { role, userId } = appConfigOptions;
     const hasScopedContext = Boolean(role || userId || (openidGroups && openidGroups.length > 0));
-    const cacheKey = getEndpointsCacheKey({ role, userId, tenantId, openidGroups });
-    const cache = getCache?.(CacheKeys.CONFIG_STORE);
-    const cachedEndpointsConfig = await cache?.get(cacheKey);
-    if (cachedEndpointsConfig) {
-      if (cachedEndpointsConfig.gptPlugins) {
-        await cache?.delete(cacheKey);
-      } else {
-        return cachedEndpointsConfig;
-      }
-    }
 
-    let shouldCache = true;
+    /** A fallback `req.config` is unscoped, so it lacks this user's role/group model restrictions. */
     let appConfig: AppConfig;
     if (req.config && req.configIsFallback && hasScopedContext) {
       try {
         appConfig = await getAppConfig(appConfigOptions);
       } catch (_error) {
         appConfig = req.config;
-        shouldCache = false;
       }
     } else {
       appConfig = req.config ?? (await getAppConfig(appConfigOptions));
@@ -257,18 +208,7 @@ export function createEndpointsConfigService(deps: EndpointsConfigDeps): {
       mergedConfig,
       appConfig?._roleModelRestrictions,
     );
-    const endpointsConfig = orderEndpointsConfig(restrictedConfig as TEndpointsConfig);
-
-    if (cache && shouldCache) {
-      if (hasScopedContext) {
-        /** Scoped configs can change at runtime (DB overrides, IdP groups) — keep a short TTL */
-        await cache.set(cacheKey, endpointsConfig, Time.TEN_MINUTES);
-      } else {
-        await cache.set(cacheKey, endpointsConfig);
-      }
-    }
-
-    return endpointsConfig;
+    return orderEndpointsConfig(restrictedConfig as TEndpointsConfig);
   }
 
   async function checkCapability(

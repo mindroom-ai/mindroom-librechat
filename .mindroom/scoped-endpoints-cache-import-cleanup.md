@@ -20,11 +20,10 @@ Several issues arose from the role/group-based model permissions features:
 
 ## What changed
 
-### Scoped endpoints cache (`getEndpointsConfig.js`)
+### Endpoints cache (removed in the v0.8.8 rebase)
 
-- Cache key now includes role and groups: `ENDPOINT_CONFIG:USER`, `ENDPOINT_CONFIG:g:USER:["group-a","group-b"]`.
-- Group-scoped entries use a 10-minute TTL (same as model config) to prevent unbounded growth.
-- `getEndpointsCacheKey(role, openidGroups)` builds the key; groups are sorted and JSON-stringified for consistency.
+- This fix originally scoped the endpoints cache by role/groups (`ENDPOINT_CONFIG:USER`, `ENDPOINT_CONFIG:g:USER:[...]`, 10-minute TTL for group keys).
+- Upstream LibreChat no longer caches the endpoints config at all, and since v0.8.8 it adds per-user runtime data to it (accessible code environments) that must not be cached. The fork cache was removed in the v0.8.8 rebase; `getEndpointsConfig()` recomputes per request like upstream, so the cross-user leak in "Why" item 1 cannot recur.
 
 ### Endpoint restriction filtering (`getEndpointsConfig.js`)
 
@@ -38,7 +37,7 @@ Several issues arose from the role/group-based model permissions features:
 ### Config middleware hardening (`app.js`, `app.spec.js`)
 
 - Added `req.configIsFallback` flag: `false` on success, `true` when falling back to base config.
-- `getEndpointsConfig()` detects fallback config and re-fetches scoped config directly, refusing to cache the result on failure.
+- `getEndpointsConfig()` detects fallback config and re-fetches scoped config directly (keeping the fallback only if that lookup fails).
 
 ### Import cleanup (`importers.js`, `importConversations.js`, `convos.js`)
 
@@ -51,8 +50,8 @@ Several issues arose from the role/group-based model permissions features:
 
 | File | What changed |
 |------|-------------|
-| `api/server/services/Config/getEndpointsConfig.js` | Scoped cache key, `applyEndpointRestrictions()`, fallback-safe caching |
-| `api/server/services/Config/getEndpointsConfig.spec.js` | New test suite (scoped caching, restrictions, fallback handling) |
+| `packages/api/src/endpoints/config/endpoints.ts` | `applyEndpointRestrictions()`, fallback re-resolution, `openidGroups` passthrough |
+| `packages/api/src/endpoints/config/endpoints.spec.ts` | Restrictions, group passthrough, fallback handling |
 | `api/server/routes/endpoints.js` | Added `optionalJwtAuth` middleware |
 | `api/server/middleware/config/app.js` | Added `req.configIsFallback` flag |
 | `api/server/middleware/config/app.spec.js` | New test suite for config middleware |

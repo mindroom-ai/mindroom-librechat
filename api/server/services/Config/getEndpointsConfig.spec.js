@@ -9,13 +9,11 @@ jest.mock('@librechat/api', () => ({
 }));
 
 jest.mock('./loadDefaultEConfig', () => jest.fn());
-jest.mock('~/cache/getLogStores', () => jest.fn());
 jest.mock('./app', () => ({
   getAppConfig: jest.fn(),
 }));
 
 const loadDefaultEndpointsConfig = require('./loadDefaultEConfig');
-const getLogStores = require('~/cache/getLogStores');
 const { getAppConfig } = require('./app');
 
 describe('getEndpointsConfig service wrapper', () => {
@@ -30,7 +28,6 @@ describe('getEndpointsConfig service wrapper', () => {
     expect(mockCreateEndpointsConfigService).toHaveBeenCalledWith({
       getAppConfig,
       loadDefaultEndpointsConfig,
-      getCache: getLogStores,
     });
     expect(service).toEqual(mockService);
   });
