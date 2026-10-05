@@ -778,7 +778,8 @@ describe('OpenAIChatCompletionController', () => {
     );
 
     const request = OpenAIChatCompletionController(req, res);
-    await Promise.resolve();
+    /** Drain the pre-enrollment awaits (agent lookup, model gate) until enrollment is pending. */
+    await new Promise((resolve) => setImmediate(resolve));
     res.once.mock.calls[0][1]();
     finishEnrollment(mockExecution);
     await request;
@@ -976,6 +977,7 @@ describe('OpenAIChatCompletionController', () => {
         expect.anything(),
       );
       expect(api.initializeAgent).not.toHaveBeenCalled();
+      expect(mockEnrollAgentExecution).not.toHaveBeenCalled();
     });
 
     it('runs an agent whose model the user may use', async () => {

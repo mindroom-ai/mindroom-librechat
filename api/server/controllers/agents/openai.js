@@ -382,6 +382,25 @@ const executeOpenAIChatCompletion = async (envelope, { req, res }) => {
     );
   }
 
+  /** Same model gate as the in-app chat: the executing user's role/group-filtered model list.
+   *  Checked before enrollment so a denied request leaves no execution record. */
+  const modelValidation = await validateAgentModel({
+    req,
+    res,
+    agent,
+    modelsConfig: await getModelsConfig(req),
+    logViolation,
+  });
+  if (!modelValidation.isValid) {
+    return sendErrorResponse(
+      res,
+      403,
+      `Agent ${agentId} uses a model that is not available to this user`,
+      'permission_error',
+      'model_not_allowed',
+    );
+  }
+
   const responseId = `chatcmpl-${nanoid()}`;
   const terminalRunError = createTerminalRunErrorObserver({
     maxProviderErrorChars: appConfig?.endpoints?.agents?.maxProviderErrorChars,
@@ -450,24 +469,6 @@ const executeOpenAIChatCompletion = async (envelope, { req, res }) => {
       return handleExecutionError({ error, res, context, appConfig });
     },
     execute: async (execution) => {
-      /** Same model gate as the in-app chat: the executing user's role/group-filtered model list. */
-      const modelValidation = await validateAgentModel({
-        req,
-        res,
-        agent,
-        modelsConfig: await getModelsConfig(req),
-        logViolation,
-      });
-      if (!modelValidation.isValid) {
-        return sendErrorResponse(
-          res,
-          403,
-          `Agent ${agentId} uses a model that is not available to this user`,
-          'permission_error',
-          'model_not_allowed',
-        );
-      }
-
       if (request.conversation_id != null) {
         if (typeof request.conversation_id !== 'string') {
           return sendErrorResponse(
