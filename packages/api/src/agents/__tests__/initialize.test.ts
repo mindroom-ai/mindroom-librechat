@@ -5107,3 +5107,48 @@ describe('initializeAgent turn delivery routing', () => {
     expect(filesOrder).toBeLessThan(toolsOrder);
   });
 });
+
+/** `model_parameters` is free-form and OpenAI-compatible clients send `modelKwargs` verbatim in
+ *  the request body, so a nested `model` would replace the model `validateAgentModel` checked
+ *  against the user's role/group-filtered list. */
+describe('initializeAgent — validated model pinning', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('drops a nested modelKwargs.model so the provider request uses the validated model', async () => {
+    const { agent, req, res, loadTools, db } = createMocks({
+      provider: Providers.OPENAI,
+      model: 'gpt-4o-mini',
+    });
+    mockExtractLibreChatParams.mockReturnValue({
+      resendFiles: false,
+      maxContextTokens: undefined,
+      modelOptions: {
+        model: 'gpt-4o-mini',
+        modelKwargs: { model: 'gpt-4o', service_tier: 'flex' },
+      },
+    });
+
+    await initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        loadTools,
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        allowedProviders: new Set([Providers.OPENAI]),
+        isInitialAgent: true,
+      },
+      db,
+    );
+
+    const { results } = mockGetProviderConfig.mock;
+    const { getOptions } = results[results.length - 1].value;
+    expect(getOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model_parameters: { model: 'gpt-4o-mini', modelKwargs: { service_tier: 'flex' } },
+      }),
+    );
+  });
+});
