@@ -1,4 +1,4 @@
-const { logger } = require('@librechat/data-schemas');
+const { logger, getTenantId, SYSTEM_TENANT_ID } = require('@librechat/data-schemas');
 const { CacheKeys, Time } = require('librechat-data-provider');
 const { loadDefaultModels, loadConfigModels, getAppConfig } = require('~/server/services/Config');
 const { getLogStores } = require('~/cache');
@@ -32,21 +32,47 @@ function filterModelsByRole(allModels, restrictions) {
 }
 
 /**
- * Build a cache key for the models config based on role and/or groups.
- * @param {string} [role]
- * @param {string[]} [openidGroups]
+ * Tenant that scopes YAML custom endpoints for this request, resolved like `getAppConfig`:
+ * an ambient tenant context wins over the user's stored tenant.
+ * @param {ServerRequest} req
+ * @returns {string | undefined}
+ */
+function getModelsTenantId(req) {
+  const ambientTenantId = getTenantId();
+  if (ambientTenantId && ambientTenantId !== SYSTEM_TENANT_ID) {
+    return ambientTenantId;
+  }
+  const tenantId = req?.user?.tenantId;
+  return tenantId && tenantId !== SYSTEM_TENANT_ID ? tenantId : undefined;
+}
+
+/**
+ * Cache key for the unfiltered models config, scoped by tenant.
+ * @param {string} [tenantId]
  * @returns {string}
  */
-function getModelsCacheKey(role, openidGroups) {
+function getBaseModelsCacheKey(tenantId) {
+  return tenantId ? `${CacheKeys.MODELS_CONFIG}:t:${tenantId}` : CacheKeys.MODELS_CONFIG;
+}
+
+/**
+ * Build a cache key for the models config based on tenant, role and/or groups.
+ * @param {string} [role]
+ * @param {string[]} [openidGroups]
+ * @param {string} [tenantId]
+ * @returns {string}
+ */
+function getModelsCacheKey(role, openidGroups, tenantId) {
+  const baseKey = getBaseModelsCacheKey(tenantId);
   if (openidGroups && openidGroups.length > 0) {
     // JSON.stringify handles group names that contain commas or special chars
     const groupsPart = JSON.stringify([...openidGroups].sort());
     // Include role because getAppConfig may fall back to role-based restrictions
     // when none of the user's groups match the config
     const rolePart = role || '_';
-    return `${CacheKeys.MODELS_CONFIG}:g:${rolePart}:${groupsPart}`;
+    return `${baseKey}:g:${rolePart}:${groupsPart}`;
   }
-  return role ? `${CacheKeys.MODELS_CONFIG}:${role}` : CacheKeys.MODELS_CONFIG;
+  return role ? `${baseKey}:${role}` : baseKey;
 }
 
 /**
@@ -59,8 +85,9 @@ function getModelsCacheKey(role, openidGroups) {
 async function loadBaseModels(req, options = {}) {
   const { refresh = false } = options;
   const cache = getLogStores(CacheKeys.CONFIG_STORE);
+  const cacheKey = getBaseModelsCacheKey(getModelsTenantId(req));
   if (!refresh) {
-    const cachedModelsConfig = await cache.get(CacheKeys.MODELS_CONFIG);
+    const cachedModelsConfig = await cache.get(cacheKey);
     if (cachedModelsConfig) {
       return cachedModelsConfig;
     }
@@ -73,7 +100,7 @@ async function loadBaseModels(req, options = {}) {
 
   const modelConfig = { ...defaultModelsConfig, ...customModelsConfig };
 
-  await cache.set(CacheKeys.MODELS_CONFIG, modelConfig);
+  await cache.set(cacheKey, modelConfig);
   return modelConfig;
 }
 
@@ -88,8 +115,9 @@ const getModelsConfig = async (req, options = {}) => {
   const { refresh = false } = options;
   const role = req?.user?.role;
   const openidGroups = req?.user?.openidGroups;
+  const tenantId = getModelsTenantId(req);
   const cache = getLogStores(CacheKeys.CONFIG_STORE);
-  const cacheKey = getModelsCacheKey(role, openidGroups);
+  const cacheKey = getModelsCacheKey(role, openidGroups, tenantId);
 
   if (!refresh) {
     const cached = await cache.get(cacheKey);
@@ -99,7 +127,7 @@ const getModelsConfig = async (req, options = {}) => {
   }
 
   const baseModels = await loadBaseModels(req, { refresh });
-  const appConfig = await getAppConfig({ role, openidGroups });
+  const appConfig = await getAppConfig({ role, openidGroups, tenantId });
   const filtered = filterModelsByRole(baseModels, appConfig._roleModelRestrictions);
 
   if (openidGroups && openidGroups.length > 0) {

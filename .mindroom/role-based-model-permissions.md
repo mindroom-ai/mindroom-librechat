@@ -91,6 +91,7 @@ librechat.yaml         (1) parsed by zod configSchema at startup
 4. **getModelsConfig(req)** (`ModelController.js`): This is the single entry point for all model list retrieval. It:
    - Reads `req.user.role` (set by auth middleware, not user-controllable).
    - Checks the per-role cache (`MODELS_CONFIG:USER`, `MODELS_CONFIG:ADMIN`, etc.).
+   - With a tenant (ambient tenant context, else `req.user.tenantId`), both the unfiltered and filtered keys gain a `:t:<tenantId>` segment (`MODELS_CONFIG:t:acme:USER`), because upstream v0.8.8 scopes YAML custom endpoints by tenant.
    - On cache miss, loads the base (unfiltered) model list from all configured providers, then calls `filterModelsByRole()` to intersect with the role's allowed models.
    - Endpoints where all models are blocked (empty `models: []`) are omitted from the result entirely, so the UI never renders an empty menu item.
    - Caches the filtered result for that role.

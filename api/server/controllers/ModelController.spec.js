@@ -1,26 +1,20 @@
-jest.mock(
-  'librechat-data-provider',
-  () => ({
-    CacheKeys: {
-      CONFIG_STORE: 'CONFIG_STORE',
-      MODELS_CONFIG: 'MODELS_CONFIG',
-    },
-    Time: {
-      TEN_MINUTES: 600000,
-    },
-  }),
-  { virtual: true },
-);
+jest.mock('librechat-data-provider', () => ({
+  CacheKeys: {
+    CONFIG_STORE: 'CONFIG_STORE',
+    MODELS_CONFIG: 'MODELS_CONFIG',
+  },
+  Time: {
+    TEN_MINUTES: 600000,
+  },
+}));
 
-jest.mock(
-  '@librechat/data-schemas',
-  () => ({
-    logger: {
-      error: jest.fn(),
-    },
-  }),
-  { virtual: true },
-);
+jest.mock('@librechat/data-schemas', () => ({
+  logger: {
+    error: jest.fn(),
+  },
+  getTenantId: jest.fn(),
+  SYSTEM_TENANT_ID: '__SYSTEM__',
+}));
 
 jest.mock('~/server/services/Config', () => ({
   loadDefaultModels: jest.fn(),
@@ -34,6 +28,7 @@ jest.mock('~/cache', () => ({
 
 const { loadDefaultModels, loadConfigModels, getAppConfig } = require('~/server/services/Config');
 const { getLogStores } = require('~/cache');
+const { getTenantId } = require('@librechat/data-schemas');
 const { CacheKeys } = require('librechat-data-provider');
 const {
   modelController,
@@ -435,5 +430,60 @@ describe('loadBaseModels', () => {
       anthropic: ['default-anthropic'],
       custom: ['custom-model'],
     });
+  });
+});
+
+describe('getModelsConfig tenant scoping', () => {
+  const configStore = {
+    get: jest.fn(),
+    set: jest.fn(),
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getTenantId.mockReturnValue(undefined);
+    getLogStores.mockReturnValue(configStore);
+    configStore.get.mockResolvedValue(null);
+    loadDefaultModels.mockResolvedValue({ openAI: ['gpt-4o'] });
+    loadConfigModels.mockResolvedValue({ TenantGateway: ['tenant-model'] });
+    getAppConfig.mockResolvedValue({});
+  });
+
+  test('scopes base and filtered cache keys by the user tenant', async () => {
+    const req = { user: { role: 'USER', tenantId: 'acme' }, query: {} };
+    await getModelsConfig(req);
+
+    expect(configStore.get).toHaveBeenCalledWith('MODELS_CONFIG:t:acme:USER');
+    expect(configStore.get).toHaveBeenCalledWith('MODELS_CONFIG:t:acme');
+    expect(configStore.set).toHaveBeenCalledWith('MODELS_CONFIG:t:acme', expect.any(Object));
+    expect(configStore.set).toHaveBeenCalledWith('MODELS_CONFIG:t:acme:USER', expect.any(Object));
+    expect(getAppConfig).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'acme' }));
+  });
+
+  test('does not serve one tenant the models cached for another', async () => {
+    const store = new Map();
+    configStore.get.mockImplementation((key) => Promise.resolve(store.get(key) ?? null));
+    configStore.set.mockImplementation((key, value) => Promise.resolve(store.set(key, value)));
+
+    await getModelsConfig({ user: { role: 'USER', tenantId: 'acme' }, query: {} });
+    loadConfigModels.mockResolvedValue({});
+    const other = await getModelsConfig({ user: { role: 'USER', tenantId: 'globex' }, query: {} });
+
+    expect(other).toEqual({ openAI: ['gpt-4o'] });
+  });
+
+  test('prefers the ambient tenant context over the stored user tenant', async () => {
+    getTenantId.mockReturnValue('ctx-tenant');
+    await getModelsConfig({ user: { role: 'USER', tenantId: 'acme' }, query: {} });
+
+    expect(configStore.get).toHaveBeenCalledWith('MODELS_CONFIG:t:ctx-tenant:USER');
+  });
+
+  test('keeps unscoped keys under the system tenant context', async () => {
+    getTenantId.mockReturnValue('__SYSTEM__');
+    await getModelsConfig({ user: { role: 'USER' }, query: {} });
+
+    expect(configStore.get).toHaveBeenCalledWith('MODELS_CONFIG:USER');
+    expect(configStore.get).toHaveBeenCalledWith('MODELS_CONFIG');
   });
 });
